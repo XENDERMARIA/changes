@@ -1,0 +1,789 @@
+import React from "react";
+import { makeStyles } from "@mui/styles";
+import PageHeader from "../../../components/PageHeader";
+import Chip from "../../../components/chip/Chip";
+import { dividerClasses } from "@mui/material";
+import NewChip from "../../../components/newChip/NewChip";
+import PaginationTwo from "../../../components/PaginationTwo";
+import { useState } from "react";
+import { ExandableComponentList } from "../../../components/hoc/expandableList";
+import InvokeApi from "../../../util/apiInvoker";
+import properties from "../../../properties/properties";
+import GenerateURL, { GenerateSearchURL } from "../../../util/APIUrlProvider";
+import { Link } from "react-router-dom";
+import BlankPage from "../../../components/BlankPage";
+import AddVirtualMachineDialog from "./AddVirtualMachineSet/AddVirtualMachineDialog";
+import AddVirtualMachineCSV from "./AddVirtualMachineSet/AddVirtualMachineCSV";
+import { Loading } from "../../utils/Loading";
+import { useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import AddSingleVMDialog from "./AddVirtualMachineSet/AddSingleVMDialog";
+import ConfigureSshKeyDialog from "./AddVirtualMachineSet/ConfigureSshKeyDialog";
+import GenericSkeleton from "../../../components/genericComponents/Skeletons/GenericSkeleton";
+
+
+
+
+const useStyles = makeStyles(() => ({
+  root: {
+    backgroundColor: "#fff",
+    padding: "20px",
+    minHeight: "calc(100vh - 70px)",
+
+    "& .table-view": {
+      marginTop: "20px",
+      border: "1px solid #E6E6E6",
+      borderRadius: "6px",
+      display: "grid",
+      gridTemplateColumns: "1fr 1fr 1fr 1fr 1fr 60px",
+      color: "#787878",
+      fontSize: "12px",
+
+      "& .table-view-row": {
+        borderBottom: "1px solid #E6E6E6",
+        padding: "9.5px 12px",
+        display: "flex",
+        alignItems: "center",
+        color: "#2F2F2F",
+
+        "&:nth-last-child(-n+5)": {
+          borderTop: "1px solid #E6E6E6",
+        },
+      },
+
+      "& .table-view-row-header": {
+        borderBottom: "1px solid #E6E6E6",
+        padding: "9.5px 12px",
+        display: "flex",
+        alignItems: "center",
+        fontSize: "12px",
+        justifyContent: "flex-start",
+        fontWeight: 600,
+        color: "#2F2F2F",
+      },
+    },
+  },
+  header: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: "32px",
+    backgroundColor: "#FFFFFF",
+  },
+
+  titleWrapper: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: "8px",
+  },
+
+  title: {
+    fontSize: "16px",
+    fontWeight: 600,
+    color: "#1F2937",
+  },
+
+  actions: {
+    display: "flex",
+    gap: "12px",
+  },
+
+  vmHeader: {
+    display: "flex",
+    alignItems: "center",
+  },
+  vmHeaderEnvTitle: {
+    display: "flex",
+    alignItems: "center",
+    gap: "6px",
+  }
+}));
+
+
+const SkeletonRow = () => {
+  return (
+    <>
+      <div className="table-view-row">
+        <GenericSkeleton
+          variant={"rect"}
+          width={"auto"}
+          height={"34px"}
+          style={{ borderRadius: "4px" }}
+        />
+      </div>
+      <div className="table-view-row">
+        <GenericSkeleton
+          variant={"rect"}
+          width={"auto"}
+          height={"34px"}
+          style={{ borderRadius: "4px" }}
+        />
+      </div>
+      <div className="table-view-row">
+        <GenericSkeleton
+          variant={"rect"}
+          width={"auto"}
+          height={"34px"}
+          style={{ borderRadius: "4px" }}
+        />
+      </div>
+      <div className="table-view-row">
+        <GenericSkeleton
+          variant={"rect"}
+          width={"auto"}
+          height={"34px"}
+          style={{ borderRadius: "4px" }}
+        />
+      </div>
+      <div
+        className="table-view-row"
+        style={{ justifySelf: "end", width: "100%" }}
+      >
+        <GenericSkeleton
+          variant={"rect"}
+          width={"auto"}
+          height={"34px"}
+          style={{ borderRadius: "4px" }}
+        />
+      </div>
+      <div
+        className="table-view-row"
+        style={{ justifySelf: "end", width: "100%" }}
+      >
+        <GenericSkeleton
+          variant={"rect"}
+          width={"auto"}
+          height={"34px"}
+          style={{ borderRadius: "4px" }}
+        />
+      </div>
+    </>
+  );
+};
+export default function VirtualMachineStatus(props) {
+  const classes = useStyles();
+  const { id } = useParams();
+  const { vm_group_id } = useParams();
+
+
+  const [state, setState] = useState({
+    curr_page: "",
+    total_page: "",
+    count: 0,
+    loading: true,
+  });
+
+  const [openCSVDialog, setOpenCSVDialog] = useState(false);
+  const [openAddVMDialog, setOpenAddVMDialog] = useState(false);
+  const [openPublicKeyDialog, setOpenPublicKeyDialog] = useState(false);
+    const [taskId, setTaskId] = useState(null);
+
+  useEffect(() => {
+    if (vm_group_id) {
+      fetchVmGroups(vm_group_id);
+    }
+  }, [vm_group_id]);
+
+  useEffect(() => {
+    if (vm_group_id) {
+      fetchVMGroupDataAndSetState(vm_group_id);
+    }
+  }, [vm_group_id]);
+  useEffect(() => {
+    console.log(state, "useEffect_useEffect");
+    if (vm_group_id && state.selectedTab == 2) {
+      fetchVmGroups(vm_group_id);
+    } else {
+    }
+  }, [vm_group_id, state.selectedTab]);
+
+  const fetchVmGroups = (id) => {
+    var requestInfo = {
+      endPoint: GenerateURL(
+        { edit_id: vm_group_id },
+        properties.api.edit_vm_group + "?vm_sets=true"
+      ),
+      httpMethod: "GET",
+      httpHeaders: { "Content-Type": "application/json" },
+    };
+
+    InvokeApi(
+      requestInfo,
+      fetchVMGroupDataAndSuccess,
+      fetchVMGroupDataAndFailed
+    );
+    setState((new_state) => ({
+      ...new_state,
+      loading_vms: true,
+    }));
+  };
+
+  const fetchVMGroupDataAndSuccess = (data) => {
+    setState((new_state) => ({
+      ...new_state,
+      vm_arr: data,
+      loading_vms: false,
+    }));
+  };
+  const fetchVMGroupDataAndFailed = (error) => {
+    const error_msg = showErrorHandlerUpdated(error);
+    setState((new_state) => ({
+      ...new_state,
+      error_vm_arr: error_msg,
+      loading_vms: false,
+    }));
+  };
+  const fetchVMGroupDataAndSetState = (id) => {
+    var requestInfo = {
+      endPoint: GenerateURL({ edit_id: id }, properties.api.edit_vm_group),
+      httpMethod: "GET",
+      httpHeaders: { "Content-Type": "application/json" },
+    };
+
+    InvokeApi(
+      requestInfo,
+      fetchVMGroupDataAndSetStateSuccess,
+      fetchVMGroupDataAndSetStateFailed
+    );
+    setState((new_state) => ({
+      ...new_state,
+      edit_state_loading: true,
+    }));
+  };
+  const fetchVMGroupDataAndSetStateSuccess = (data) => {
+    console.log(data, "fdjksajkdas");
+    setState((new_state) => ({
+      ...new_state,
+      edit_state_loading: false,
+      data: {
+        ...new_state.data,
+        ...data,
+      },
+    }));
+  };
+  const fetchVMGroupDataAndSetStateFailed = (error) => {
+    const error_msg = showErrorHandlerUpdated(error);
+    setState((new_state) => ({
+      ...new_state,
+      edit_state_loading: false,
+      error_msg: error_msg,
+    }));
+  };
+
+
+
+  function fetchSelectedVMData(id) {
+    var requestInfo = {
+      endPoint: GenerateURL({ edit_id: id }, properties.api.edit_single_vm),
+      httpMethod: "GET",
+      httpHeaders: { "Content-Type": "application/json" },
+    };
+    InvokeApi(
+      requestInfo,
+      fetchSelectedVMDataSuccess,
+      fetchSelectedVMDataFailed
+    );
+
+    setState((new_state) => ({
+      ...new_state,
+      loading_form_data: true,
+    }));
+  }
+  function fetchSelectedVMDataSuccess(data) {
+    console.log(data, "fdsakjfjskafsa");
+    handleClickOpen(false);
+    setState((new_state) => ({
+      ...new_state,
+      singleVmChildState: {
+        ...addSingleVMDefaultState(),
+        data: {
+          ...data,
+        },
+      },
+      loading_form_data: false,
+    }));
+  }
+  function fetchSelectedVMDataFailed(error) {
+    console.log(error, "fdsakjfjskafsa");
+    const error_msg = showErrorHandlerUpdated(error);
+    setState((new_state) => ({
+      ...new_state,
+      error: error_msg,
+      loading_form_data: false,
+    }));
+  }
+
+  const handleOpenDialog = () => {
+    setState((prevState) => ({
+      ...prevState,
+      openDialog: true,
+    }));
+  };
+
+  const handleCloseDialog = () => {
+    setState((prevState) => ({
+      ...prevState,
+      openDialog: false
+    }));
+  };
+  const handleCloseDialogAndFetchVMs = () => {
+    console.log(state.parent_state, "jkdjsjfadfjka");
+    if (state.parent_state && state.parent_state.id) {
+      fetchVmGroups(state.parent_state.id);
+    }
+    setState((new_state) => ({
+      ...new_state,
+      selectedTab: 2,
+      data: {},
+      error: {},
+    }));
+  };
+
+  const handleDialogSuccess = (response) => {
+    // Refresh the list after successful creation
+    fetchAllVMGroups();
+    handleCloseDialog();
+    // Navigate to edit page if needed
+    if (response?.id) {
+      history(`/vm-group/${response.id}/edit`);
+    }
+  };
+
+  const handleClickClose = () => {
+    setOpen((prev_state) => ({
+      ...prev_state,
+      open: false,
+    }));
+  };
+  const handleClickOpen = (doClearForm) => {
+    setOpen((prev_state) => ({
+      ...prev_state,
+      open: true,
+      clear_form_flag: doClearForm,
+    }));
+  };
+
+  function fetchPageInfo(enteredPageNumber) {
+    var requestInfo = {
+      endPoint: GenerateURL({}, properties.api.create_vm_group),
+      httpMethod: "GET",
+      httpHeaders: { "Content-Type": "application/json" },
+    };
+
+    if (enteredPageNumber > 1) {
+      requestInfo.endPoint =
+        requestInfo.endPoint +
+        "?limit=10&offset=" +
+        (enteredPageNumber - 1) * 10;
+    }
+
+    var current_page = enteredPageNumber;
+    setState((prevState) => ({
+      ...prevState,
+      loading: true,
+    }));
+    InvokeApi(
+      requestInfo,
+      (response) => {
+        handleWorkflowPageDataSuccessApiHit(response, current_page);
+      },
+      fetchAllVMGroupsDataFailed
+    );
+  }
+
+  // Helper functions moved outside fetchPageInfo
+  function onFileUpload(e) {
+    ParseFile(e, handleSuccessFileParse, handleFailedFileParse);
+  }
+
+  function handleSuccessFileParse(file_data) {
+    const key = file_data.event_name;
+    const value = {
+      name: file_data.name,
+      content: file_data.content,
+    };
+    updateData(key, value);
+  }
+
+  function updateData(key, value) {
+    setState((new_state) => ({
+      ...new_state,
+      show_save_button: true,
+      data: {
+        ...new_state.data,
+        [key]: value,
+      },
+      error: {
+        ...new_state.error,
+        [key]: "",
+      },
+    }));
+  }
+
+  function handleFailedFileParse(error) {
+    setState((new_state) => ({
+      ...new_state,
+      error: {
+        vm_config: "Invalid File Format",
+      },
+    }));
+  }
+
+  return (
+    <div className={classes.root}>
+      {/* Wrap all content in a single parent div */}
+      <div className={classes.vmHeader}>
+        <div style={{ flex: 1 }}>
+          <PageHeader
+            heading="Virtual Machine Group: Example_Demo"
+            subHeading={
+              <div className={classes.vmHeaderEnvTitle}>
+                Environment Restriction:
+                <NewChip variant={"success"} label={"DEV"} shape="standard" style></NewChip>
+                <NewChip variant={"info"} label={"Prod"} shape="standard"></NewChip>
+                <NewChip variant={"highlight"} label={"UAT"} shape="standard"></NewChip>
+                <NewChip variant={"warning"} label={"OA"} shape="standard"></NewChip>
+
+              </div>
+            }
+            primaryButton={{
+              actionType: "link",
+              icon: <span className="ri-add-line">&nbsp;</span>,
+              text: "FETCH PUBLIC KEY",
+              buttonClass: "btn btn-pagintaion ",
+            }}
+
+            icon="ri-cpu-line font-24"
+          />
+        </div>
+        <span className="ri-more-2-fill font-24" />
+      </div>
+
+      <div className={classes.header}>
+        <div className={classes.titleWrapper}>
+          <span className={classes.title}>Virtual Machines</span>
+          <span className="ri-information-line font-16" />
+        </div>
+
+        <div className={classes.actions}> <button onClick={() => handleClickOpen(true)} className="btn btn-pagintaion"> <span className="ri-add-line"></span>&nbsp;<span>Add More</span> </button> <button
+          onClick={() => setOpenCSVDialog(true)} className="btn btn-pagintaion"> <span className="ri-upload-2-line"></span>&nbsp; <span>Upload CSV File</span>
+        </button>
+        </div>
+      </div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      {/* 
+        <div className="table-view mb-24">
+          <div className="table-view-row-header">VM Name</div>
+          <div className="table-view-row-header">Primary Tags</div>
+          <div className="table-view-row-header">Secondary Tags</div>
+          <div className="table-view-row-header">IP Address</div>
+          <div className="table-view-row-header">Status</div>
+          <div className="table-view-row-header"></div> */}
+      {state.loading_vms ? (
+        <>
+          <div style={{ width: "100%" }} className="loading-area">
+            <div className="table-view">
+              <div className="table-view-row-header">VM Name</div>
+              <div className="table-view-row-header">Primary Tags</div>
+              <div className="table-view-row-header">
+                Secondary Tags
+              </div>
+              <div className="table-view-row-header">IP Address</div>
+              <div className="table-view-row-header">Status</div>
+              <div className="table-view-row-header"></div>
+              <>
+                {Array.from({ length: 5 }).map((item) => {
+                  return <SkeletonRow />;
+                })}
+              </>
+            </div>
+          </div>
+        </>
+      ) : (
+        <>
+          {state.vm_arr && state.vm_arr.length > 0 ? (
+            <>
+              <div className="table-view">
+                <div className="table-view-row-header">VM Name</div>
+                <div className="table-view-row-header">
+                  Primary Tags
+                </div>
+                <div className="table-view-row-header">
+                  Secondary Tags
+                </div>
+                <div className="table-view-row-header">IP Address</div>
+                <div className="table-view-row-header">Status</div>
+                <div className="table-view-row-header"></div>
+                {state.vm_arr.map((item, index) => {
+                  let expandable_add_primary_tag = item[
+                    "add_primary_tag"
+                  ]
+                    ? +(
+                      item["add_primary_tag"].length - iteration_count
+                    )
+                    : null;
+                  let expandable_add_secondary_tag = item[
+                    "add_secondary_tag"
+                  ]
+                    ? +(
+                      item["add_secondary_tag"].length -
+                      iteration_count
+                    )
+                    : null;
+                  return (
+                    <>
+                      <div className="table-view-row">
+                        {item.vm_name}
+                      </div>
+                      <div className="table-view-row">
+                        {item.add_primary_tag &&
+                          typeof item.add_primary_tag == "object" ? (
+                          <div className="add_primary_tag">
+                            <ExandableComponentList
+                              compoenent_list={item.add_primary_tag}
+                              variant="capsule_view"
+                              iteration_count={iteration_count}
+                              expandable_component={
+                                expandable_add_primary_tag
+                              }
+                            />
+                          </div>
+                        ) : (
+                          <span
+                            className=""
+                            style={{
+                              backgroundColor: "#f4f4f4",
+                              border: "1px solid #E6E6E6",
+                              fontSize: "10px",
+                              color: "#797979",
+                              padding: "3px 5px",
+                              borderRadius: "4px",
+                              fontWeight: 600,
+                            }}
+                          >
+                            {item.add_primary_tag}
+                          </span>
+                        )}
+                      </div>
+                      <div className="table-view-row">
+                        {item.add_secondary_tag &&
+                          typeof item.add_secondary_tag == "object" ? (
+                          <div className="add_primary_tag">
+                            <ExandableComponentList
+                              compoenent_list={item.add_secondary_tag}
+                              variant="capsule_view"
+                              iteration_count={iteration_count}
+                              expandable_component={
+                                expandable_add_secondary_tag
+                              }
+                            />
+                          </div>
+                        ) : (
+                          <span
+                            className=""
+                            style={{
+                              backgroundColor: "#f4f4f4",
+                              border: "1px solid #E6E6E6",
+                              fontSize: "10px",
+                              color: "#797979",
+                              padding: "3px 5px",
+                              borderRadius: "4px",
+                              fontWeight: 600,
+                            }}
+                          >
+                            {item.add_secondary_tag}
+                          </span>
+                        )}
+                      </div>
+                      <div className="table-view-row">
+                        <span className="" style={{ color: "#787878" }}>
+                          {item.ip_address}
+                        </span>
+                      </div>
+                      <div className="table-view-row">
+                        {item.loading ? (
+                          <div className="env_data_loading">
+                            <Loading varient="light" />
+                          </div>
+                        ) : (
+                          <span className="">
+                            {item.status && item.status == "ONLINE" ? (
+                              <span
+                                style={{
+                                  backgroundColor: "#E6FBEA",
+                                  border: "1px solid #D1F4E3",
+                                  fontSize: "10px",
+                                  color: "#0B844A",
+                                  padding: "3px 5px",
+                                  borderRadius: "4px",
+                                  fontWeight: 600,
+                                }}
+                              >
+                                ONLINE
+                              </span>
+                            ) : (
+                              <span
+                                style={{
+                                  backgroundColor: "#FCF6E1",
+                                  border: "1px solid #F7EABB",
+                                  fontSize: "10px",
+                                  color: "#FEA111",
+                                  padding: "3px 5px",
+                                  borderRadius: "4px",
+                                  fontWeight: 600,
+                                }}
+                              >
+                                OFFLINE
+                              </span>
+                            )}
+                          </span>
+                        )}
+                      </div>
+                      <div
+                        className="table-view-row"
+                        style={{ justifySelf: "end", width: "100%" }}
+                      >
+                        <div className="d-flex align-center space-between ml-auto">
+                          <button
+                            className="btn btn-outline-primary "
+                            style={{
+                              padding: "4px 8px",
+                              borderRadius: "4px",
+                              fontSize: "11px",
+                            }}
+                            onClick={() => {
+                              testConnectionApiHit(item, index);
+                            }}
+                          >
+                            Test
+                          </button>
+                          {
+                            <VMSetHealthDialog
+                              isActive={item.status === "ONLINE"}
+                              id={item.id}
+                            />
+                          }
+
+                          <div style={{ marginTop: "4px" }}>
+                            <PopoverDropdown
+                              name={item.vm_name}
+                              id={item.id}
+                              handleOpenDialog={setDataforEdit}
+                              handleRefresh={() => {
+                                fetchVmGroups(
+                                  id || state.parent_state.id
+                                );
+                              }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  );
+                })}
+              </div>
+            </>
+          ) : (
+             // EMPTY STATE (Image 1)
+                    <div className="table-view mb-24">
+                      <div className="table-view-row-header">VM Name</div>
+                      <div className="table-view-row-header">Primary Tags</div>
+                      <div className="table-view-row-header">Secondary Tags</div>
+                      <div className="table-view-row-header">IP Address</div>
+                      <div className="table-view-row-header">Status</div>
+                      <div className="table-view-row-header"></div>
+            
+                      <BlankPage
+                        additionalClass="mb-16"
+                        text="No Virtual Machine added"
+                        subHeading='Add VM through "add more" or "Upload CSV Above"'
+                        pageIcon={
+                          <span className="ri-cpu-line font-28 color-key-gray"></span>
+                        }
+                        variant="inside-table"
+                        additionalStyles={{
+                          padding: "55px 0",
+                          textAlign: "center",
+                          height: "auto",
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gridColumn: "1 / -1",
+                        }}
+                        backgroundColor="#F4F4F4"
+                      />
+                    </div>
+                  )}
+
+        {state.vm_arr && state.vm_arr.length > 0 && (
+        <PaginationTwo
+          current_page_count={state.curr_page}
+          total_count={state.total_page}
+          next={state.next}
+          count={state.count}
+          previous={state.previous}
+          on_previous_click={() => fetchPrevInfo()}
+          on_next_click={() => fetchNextInfo()}
+          on_pageNumber_click={(pageNumber) => fetchPageInfo(pageNumber)}
+        />
+      )}
+        </>
+      )}
+
+      {/* ========== DIALOGS ========== */}
+      <AddSingleVMDialog
+        open={openAddVMDialog}
+        handleClose={handleClickClose}
+        sendDataToParent={() => {}}
+        editedItem={null}
+        prev_state={state.singleVmChildState}
+        clear_form_flag={!state.singleVmChildState}
+        vmGroupDetails={state.parent_state}
+        handleCloseDialogAndFetchVMs={handleCloseDialogAndFetchVMs}
+        onClickOpenSSHkeyDialog={() => setOpenPublicKeyDialog(true)}
+      />
+
+      <AddVirtualMachineCSV
+  open={openCSVDialog}
+  handleClose={() => setOpenCSVDialog(false)}
+  vmGroupId={state.data?.id || state.parent_state?.id || vm_group_id} // ✅ Use fetched data first
+  handleCloseDialogAndFetchVMs={handleCloseDialogAndFetchVMs}
+/>
+      <ConfigureSshKeyDialog
+        open={openPublicKeyDialog}
+        handleClose={() => setOpenPublicKeyDialog(false)}
+      />
+
+      {taskId && (
+        <ShowActivityStatusFramework
+          open={true}
+          task_id={taskId}
+          handleClose={() => setTaskId(null)}
+        />
+      )}
+    </div>
+  );
+}
