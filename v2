@@ -1,0 +1,516 @@
+import React, { useState, useEffect } from "react";
+import { makeStyles } from "@mui/styles";
+import Dialog from "@mui/material/Dialog";
+import { Input } from "../../../../components/genericComponents/Input";
+import MasterEnvDropdown from "../../../../components/genericComponents/MasterEnvDropdown";
+import GenerateURL from "../../../../util/APIUrlProvider";
+import properties from "../../../../properties/properties";
+import InvokeApi, { PostData } from "../../../../util/apiInvoker";
+import { useCustomSnackbar } from "../../../../contexts/SnackbarContext";
+import {
+  VALIDATION_TYPE_REQUIRED,
+  ValidateDataSet,
+} from "../../../../util/Validator";
+import { showErrorHandlerUpdated } from "../../../../util/util";
+import Button from "../../../../components/genericComponents/Button";
+import style from "react-syntax-highlighter/dist/esm/styles/hljs/a11y-dark";
+import { useNavigate } from "react-router-dom";
+
+const AddVirtualMachineDialog = ({
+  open = true,
+  handleSuccess,
+  handleClose,
+}) => {
+  const classes = useStyles();
+  const { showSnackbar } = useCustomSnackbar();
+  const [isOpen, setIsOpen] = useState(open);
+
+  const localStorageKey = "vm_group_creation_info_flag";
+  const hideInfoSection = JSON.parse(localStorage.getItem(localStorageKey));
+  const history = useNavigate();
+  const [state, setState] = useState({
+    showLeftPanel: true,
+    isLoading: false,
+    dontShowAgain: false,
+    data: {},
+    error: {},
+    master_envs_list: [],
+    selectedMasterEnv: [],
+    env_data_loading: false,
+  });
+
+  useEffect(() => {
+    setIsOpen(open);
+  }, [open]);
+
+  useEffect(() => {
+    if (open) {
+      setState((prev) => ({
+        ...prev,
+        showLeftPanel: !hideInfoSection,
+        isLoading: false,
+        dontShowAgain: !!hideInfoSection,
+        data: {},
+        error: {},
+        selectedMasterEnv: [],
+      }));
+    }
+  }, [open, hideInfoSection]);
+
+  useEffect(() => {
+    if (open) {
+      fetchMasterEnvList();
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (state.data.environment_master_type) {
+      const filteredEnvs = state.master_envs_list.filter((item) =>
+        state.data.environment_master_type.includes(item.order)
+      );
+
+      setState((prev) => ({
+        ...prev,
+        selectedMasterEnv: filteredEnvs,
+      }));
+    }
+  }, [state.master_envs_list, state.data.environment_master_type]);
+
+  function fetchMasterEnvList() {
+    var requestInfo = {
+      endPoint: GenerateURL({}, properties.api.master_envs),
+      httpMethod: "GET",
+      httpHeaders: { "Content-Type": "application/json" },
+    };
+    InvokeApi(
+      requestInfo,
+      fetchMasterEnvListDataSuccess,
+      fetchMasterEnvListDataFailed
+    );
+
+    setState((prev) => ({
+      ...prev,
+      env_data_loading: true,
+    }));
+  }
+
+  function fetchMasterEnvListDataSuccess(data) {
+    setState((prev) => ({
+      ...prev,
+      master_envs_list: data.map((item) => ({
+        tabName: item.name,
+        order: item.id,
+      })),
+      env_data_loading: false,
+    }));
+  }
+
+  function fetchMasterEnvListDataFailed(error) {
+    setState((prev) => ({
+      ...prev,
+      error: error,
+      env_data_loading: false,
+    }));
+  }
+
+  const updateMasterEnv = (master_env_order) => {
+    let filter_current_env = state.master_envs_list.find(
+      (item) => item.order === master_env_order
+    );
+
+    if (filter_current_env) {
+      setState((prev) => {
+        const isAlreadySelected = prev.selectedMasterEnv.some(
+          (env) => env.order === master_env_order
+        );
+
+        if (!isAlreadySelected) {
+          return {
+            ...prev,
+            selectedMasterEnv: [...prev.selectedMasterEnv, filter_current_env],
+            error: {},
+          };
+        }
+        return prev;
+      });
+    }
+  };
+
+  const removeMasterEnv = (order) => {
+    setState((prev) => ({
+      ...prev,
+      selectedMasterEnv: prev.selectedMasterEnv.filter(
+        (env) => env.order !== order
+      ),
+    }));
+  };
+
+  const updateSelectedMasterEnv = (data) => {
+    console.log(data, "updateSelectedMasterEnv");
+  };
+
+  const onChangeHandler = (e) => {
+    const { name, value } = e.target;
+    setState((prev) => ({
+      ...prev,
+      data: {
+        ...prev.data,
+        [name]: value,
+      },
+      error: {
+        ...prev.error,
+        [name]: "",
+      },
+    }));
+  };
+
+  const validateAndSave = () => {
+    const validations = {
+      virtual_group_name: [VALIDATION_TYPE_REQUIRED],
+      selectedMasterEnv: [VALIDATION_TYPE_REQUIRED],
+    };
+
+    if (state.selectedMasterEnv?.length > 0) {
+      validations.selectedMasterEnv = validations.selectedMasterEnv.filter(
+        (v) => v !== VALIDATION_TYPE_REQUIRED
+      );
+    }
+
+    const result = ValidateDataSet(state.data, validations);
+
+    if (!result.valid) {
+      const error_msg = showErrorHandlerUpdated({ ...result.error });
+      showSnackbar("error", "Unable to create VM group.", error_msg);
+      setState((prev) => ({
+        ...prev,
+        error: result.error,
+        isLoading: false,
+      }));
+      return;
+    }
+
+    const post_data = {
+      virtual_group_name: state.data.virtual_group_name,
+      environment_master_type: state.selectedMasterEnv.map(
+        (item) => item.order
+      ),
+    };
+
+    const temp_url = GenerateURL({}, properties.api.create_vm_group);
+
+    setState((prev) => ({ ...prev, isLoading: true }));
+    showSnackbar("info", "Creating VM Group...");
+
+    PostData(temp_url, post_data, saveSuccess, saveFail);
+  };
+
+  function saveSuccess(response) {
+    showSnackbar("success", "VM group created.");
+    if (response?.id) {
+      history(`/vm-group/${response.id}/vm/list`);
+    }
+    setState((prev) => ({
+      ...prev,
+      isLoading: false,
+    }));
+    nav;
+  }
+
+  function saveFail(response) {
+    const error_msg = showErrorHandlerUpdated(response);
+
+    showSnackbar("error", "Unable to create VM group.", error_msg);
+
+    setState((prev) => ({
+      ...prev,
+      isLoading: false,
+      error: {
+        ...prev.error,
+        ...response,
+      },
+    }));
+  }
+
+  const handleCloseLeftStrip = () => {
+    if (state.dontShowAgain) {
+      localStorage.setItem(localStorageKey, JSON.stringify(true));
+    }
+    setState((prev) => ({
+      ...prev,
+      showLeftPanel: false,
+    }));
+  };
+
+  const handleDontShowCheckbox = (e) => {
+    const value = e?.target?.type === "checkbox" ? e.target.checked : e;
+    setState((prev) => ({ ...prev, dontShowAgain: value }));
+  };
+
+  const closeDialog = () => {
+    setState((prev) => ({
+      ...prev,
+      data: {},
+      error: {},
+      selectedMasterEnv: [],
+    }));
+    setIsOpen(false);
+    if (handleClose) handleClose();
+  };
+
+  return (
+    <Dialog
+      fullWidth={true}
+      maxWidth={"md"}
+      open={isOpen}
+      onClose={closeDialog}
+      className={`${classes.root} dialog-align-corner`}
+      aria-labelledby="max-width-dialog-title"
+    >
+      <div
+        className="d-grid ml-auto dialog-sub-component"
+        style={{
+          gridTemplateColumns: state.showLeftPanel
+            ? "396px 650px"
+            : "0px 650px",
+        }}
+      >
+        {!hideInfoSection && (
+          <div
+            className={
+              state.showLeftPanel
+                ? "left-panel-dialog bg-white position-relative"
+                : "left-panel-dialog-down"
+            }
+          >
+            <div
+              className={
+                "d-flex align-center space-between left-panel-header pd-10"
+              }
+              style={{ padding: "9px 20px" }}
+            >
+              <p>INFORMATION</p>
+              <button
+                className="btn btn-icon-only"
+                onClick={handleCloseLeftStrip}
+              >
+                <span className="ri-close-line color-icon-secondary"></span>
+              </button>
+            </div>
+            <div className="pd-10" style={{ padding: "16px 20px" }}>
+              <p className="font-16 font-weight-600 color-primary mb-10">
+                What are VM Groups?
+              </p>
+
+              <p
+                className="font-12 color-icon-secondary mb-8"
+                style={{ color: "#404040" }}
+              >
+                A VM Group is a logical collection of virtual machines that are
+                managed together as a single entity. It simplifies
+                administration by allowing shared configurations, scaling rules,
+                and deployment pipelines.
+              </p>
+
+              <ul
+                className="font-12 color-icon-secondary"
+                style={{ color: "#404040", paddingLeft: "18px", margin: 0 }}
+              >
+                <li className="mb-6">
+                  <strong>Unified Management:</strong> Organize VMs based on
+                  their purpose (e.g., Database Cluster, Legacy Authentication
+                  Service, or department-specific VMs) for quick access and bulk
+                  actions.
+                </li>
+                <li className="mb-6">
+                  <strong>Bulk Operations:</strong> Perform actions like
+                  power-on, restart, sleep, or backup on all VMs in a group
+                  simultaneously.
+                </li>
+                <li>
+                  <strong>Placement Constraints:</strong> Improve performance
+                  and fault tolerance by distributing resource-intensive VMs
+                  across different physical hosts or clusters.
+                </li>
+              </ul>
+            </div>
+
+            <div
+              className="checkbox-only-divi"
+              style={{ padding: "10px 20px" }}
+            >
+              <Input
+                style={{}}
+                type="simple-checkbox"
+                name="dont_show_again"
+                label="Don't show this again"
+                data={{ dont_show_again: state.dontShowAgain }}
+                value={state.dontShowAgain}
+                error={state.error}
+                onChangeHandler={handleDontShowCheckbox}
+              />
+            </div>
+          </div>
+        )}
+
+        <div className="right-panel-dialog bg-white">
+          <div
+            className="font-18 font-weight-600 color-white d-flex align-center space-between"
+            style={{ backgroundColor: "#0086ff", padding: "13px 20px" }}
+          >
+            <p>Add Virtual Machine Group</p>
+            <button
+              className="btn float-cancel-button "
+              style={
+                hideInfoSection || !state.showLeftPanel
+                  ? {
+                      position: "absolute",
+                      top: "0px",
+                      left: "-55px",
+                      zIndex: 1000,
+                    }
+                  : {
+                      position: "absolute",
+                      top: "0px",
+                      left: "-450px",
+                      zIndex: 1000,
+                    }
+              }
+              onClick={closeDialog}
+            >
+              <span className="ri-close-line "></span>
+            </button>
+          </div>
+
+          <div
+            style={{
+              padding: "0 20px 120px 20px",
+              overflowY: "auto",
+            }}
+          >
+            <div className={classes.formContainer}>
+              <div className={classes.formGroup}>
+                <Input
+                  type="text"
+                  label="Virtual Machine Group Name"
+                  placeholder="Enter Name"
+                  name="virtual_group_name"
+                  mandatorySign
+                  data={state.data}
+                  error={state.error}
+                  maxlength="30"
+                  info={
+                    "In Buildpiper, for a monolithic application, you can onboard a single VM or a group of VMs, referred to as a VM Group."
+                  }
+                  onChangeHandler={onChangeHandler}
+                  style={{ height: "46px" }}
+                  maxLength={30}
+                />
+              </div>
+
+              <div className={classes.formGroup}>
+                <MasterEnvDropdown
+                  envTabList={[]}
+                  selectedMasterEnv={state.selectedMasterEnv}
+                  selectedEnvTab={state.selected_env_master_id}
+                  envChangeHandler={updateSelectedMasterEnv}
+                  masterEnvList={state.master_envs_list}
+                  selectedComponentEnv={state.selected_component_env_taborder}
+                  masterEnvChangeHandler={updateMasterEnv}
+                  removeFromList={removeMasterEnv}
+                  error={state?.error?.selectedMasterEnv ? true : false}
+                  style={{ marginTop: "5px" }}
+                />
+                {state?.error?.selectedMasterEnv && (
+                  <p className="error-message">
+                    {state.error.selectedMasterEnv}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="footer-right-panel d-flex align-center justify-end">
+            <Button variant="ghost" onClick={closeDialog}>
+              CANCEL
+            </Button>
+            <Button
+              className="btn btn-primary"
+              isLoading={state.isLoading}
+              onClick={validateAndSave}
+            >
+              SAVE & CONTINUE
+            </Button>
+          </div>
+        </div>
+      </div>
+    </Dialog>
+  );
+};
+
+const useStyles = makeStyles((theme) => ({
+  root: {
+    "&.dialog-align-corner": {
+      "& .MuiPaper-root": {
+        maxWidth: "1100px",
+        margin: "0",
+        fontFamily: "Montserrat",
+      },
+    },
+    "& .right-panel-dialog": {
+      position: "relative",
+      width: "650px",
+      height: "100%",
+      display: "flex",
+      flexDirection: "column",
+    },
+    "& .left-panel-dialog": {
+      width: "396px",
+      transition: "width 0.3s",
+      "& .left-panel-header": {
+        borderBottom: "1px solid #f1f1f1",
+        fontSize: "12px",
+        fontWeight: "600",
+        color: "#0086FF",
+      },
+      "& .checkbox-only-divi": {
+        position: "absolute",
+        bottom: "10px",
+        backcolor: "#fff",
+      },
+    },
+
+    "& .left-panel-dialog-down": {
+      width: "0px",
+      overflow: "hidden",
+      transition: "width 0.3s",
+    },
+    "& .footer-right-panel": {
+      backgroundColor: "#fafafa",
+      padding: "20px",
+      position: "absolute",
+      bottom: "0px",
+      width: "650px",
+      gap: "13px",
+      borderTop: "1px solid #e6e6e6",
+    },
+    "& .wrapper-new-file": {
+      "& .input-file-wraper": {
+        border: "none",
+        padding: "4px",
+        gap: "0px",
+        justifyContent: "center",
+      },
+    },
+  },
+
+  formContainer: {
+    width: "100%",
+    marginTop: "30px",
+  },
+  formGroup: {
+    marginBottom: "20px",
+    fontSize: "14px",
+  },
+}));
+
+export default AddVirtualMachineDialog;
