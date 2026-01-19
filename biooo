@@ -1,0 +1,210 @@
+type == "new" ?
+    <div className={classes.root}>
+        <div className={newTypeClases.root}>
+            {
+                state.error ?
+                    <ErrorComponent error={state.error} /> : null
+            }
+
+            <div className={newTypeClases.cardBody}>
+                {/* Header (Top) - ALWAYS show BACK and SKIP */}
+                <div className="d-flex space-between width-full mb-20">
+                    <button 
+                        className="btn btn-transparent" 
+                        onClick={handleRefresh}
+                        style={{ color: '#666', fontSize: '14px', fontWeight: '500' }}
+                    >
+                        <span className='ri-arrow-left-line mr-5'></span> BACK
+                    </button>
+                    <button 
+                        className="btn btn-transparent" 
+                        onClick={handleClickToSkip}
+                        style={{ color: '#666', fontSize: '14px', fontWeight: '500' }}
+                    >
+                        SKIP <span className='ri-arrow-right-line ml-5'></span>
+                    </button>
+                </div>
+
+                {
+                    showProgressBar || state.status == "RUNNING" || state.status == "IN_QUEUE" ?
+                        <div className="main-text">
+                            {state.activity_obj?.header}
+                        </div> : null
+                }
+
+                {
+                    showProgressBar || state.status == "RUNNING" || state.status == "IN_QUEUE" ?
+                        <>
+                            <div className="hint-text">
+                                Please wait this might take some time..
+                            </div>
+                            <div className="linear-progressbar mt-16">
+                                <LinearProgress variant={showProgressBar || state.status == "RUNNING" || state.status == "IN_QUEUE" ? "indeterminate" : "determinate"} value={progress} />
+                            </div>
+                        </> :
+
+                        <>
+                            {
+                                state.status == "FAILED" ?
+                                    <>
+                                        <div className="main-text">
+                                            {state.activity_obj?.fail_message}
+                                        </div>
+                                        <Tooltip title={state.description}>
+                                            <div className="isa_info custom-box-new border-danger" style={{ marginTop: '30px', margin: 'auto', width: "100% !important", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                                <span className="text-ellipsis-multiline color-E1941D" style={{ overflow: 'hidden', width: "70%" }} >{state.description}</span>
+                                            </div>
+                                        </Tooltip>
+
+                                    </> : null
+                            }
+                            {
+                                state.status == "SUCCESS" ?
+                                    <>
+                                        <div className="main-text">
+                                            {state?.activity_obj?.success_message}
+                                        </div>
+                                        <div className="hint-text">
+                                            {
+                                                hintText
+                                            }
+                                        </div>
+                                    </> : null
+                            }
+                        </>
+                }
+
+
+                <div className={newTypeClases.contentbox}>
+                    <div className='msg-box'>
+                        {
+                            state.sub_task_status.map((task, index) => (
+                                <div className={"msg-div"} key={index} style={index == state.sub_task_status.length - 1 ? { borderBottom: "none" } : {}}>
+                                    <div className='d-flex align-center' style={{ gap: "12px" }}>
+                                        <div className={task.status == "SUCCESS" ? "success" : task.status == "FAILED" ? "failed" : "running"}>
+                                            {task.status == "SUCCESS" ? <span className="ri-check-fill font-16"></span>
+                                                : null}
+                                            {task.status == "FAILED" ? <span className="ri-error-warning-line color-E1941D font-16"></span>
+                                                : null}
+                                            {task.status == "RUNNING" || task.status == "IN_QUEUE" ? <span className="ri-settings-3-line font-16"></span>
+                                                : null}
+                                        </div>
+                                        <Tooltip title={task.activity_sub_task} TransitionComponent={Zoom}>
+                                            <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{task.activity_sub_task}</span>
+                                        </Tooltip>
+
+                                    </div>
+                                    <div className="d-flex align-center" style={{gap:'10px'}}>
+                                        {
+                                            task.payload_json && task.payload_json.task_id ?
+
+                                                <Link to={"/logs?global_task_id=" + task.payload_json.task_id} target="_blank" className="mr-5 btn-link d-flex align-center">
+                                                    <i className="ri-eye-line"></i>
+                                                    <span>View Logs</span>
+                                                </Link>
+                                                : null
+                                        }
+                                        {task.status == "SUCCESS" ? <span className="color-success font-12 font-weight-600">Success</span>
+                                            : null}
+                                        {task.status == "FAILED" ? <span className="color-danger font-12 font-weight-600">Failed</span>
+                                            : null}
+                                        {task.status == "RUNNING" || task.status == "IN_QUEUE" ? <RunningDotsComponent isFromEventSidePannel={true} />
+                                            : null}
+                                    </div>
+                                </div>
+                            ))
+                        }
+                    </div>
+                </div>
+
+
+            </div>
+            
+            {/* Footer (Bottom) - ALWAYS show layout with CONTINUE (left) and variant-based buttons (right) */}
+            <div className={newTypeClases.cardFooter}>
+                <div className="footer-layout" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                    {/* Left Side - ALWAYS CONTINUE */}
+                    <div className="footer-left">
+                        <button 
+                            className='btn btn-outline-secondary' 
+                            onClick={handleContinueToNextTab}
+                            disabled={showProgressBar || state.status == "RUNNING" || state.status == "IN_QUEUE"}
+                            style={showProgressBar || state.status == "RUNNING" || state.status == "IN_QUEUE" ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
+                        >
+                            CONTINUE
+                        </button>
+                    </div>
+                    
+                    {/* Right Side - Variant-based buttons */}
+                    <div className="footer-right" style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                        {/* variant = "SAME_PAGE_REDIRECT" -> Retry + View Logs */}
+                        {props.variant == "SAME_PAGE_REDIRECT" ? (
+                            <>
+                                {(state.status == "FAILED") && (
+                                    <button 
+                                        onClick={handleRefresh} 
+                                        className="retry-btn font-12 font-weight-600 avtar"
+                                    >
+                                        RETRY
+                                    </button>
+                                )}
+                                <a 
+                                    href={"/logs?global_task_id=" + task_id + "&num=" + state.triggered_service?.id + "&service_name=" + state.triggered_service?.entity_detail?.component?.name + "&service_env=" + state.triggered_service?.entity_detail?.component_env?.name} 
+                                    target="_blank" 
+                                    className="view-log-btn font-12 avtar font-weight-600"
+                                >
+                                    VIEW LOGS
+                                </a>
+                            </>
+                        ) : props.variant === "cluster_onboarding" ? (
+                            /* variant = "cluster_onboarding" -> Re-Configure + View Logs */
+                            <>
+                                {(state.status == "FAILED") && (
+                                    <button 
+                                        className="re-configure-btn font-12 font-weight-500 avtar" 
+                                        onClick={triggerBuildDeploy}
+                                    >
+                                        RE-CONFIGURE
+                                    </button>
+                                )}
+                                <a 
+                                    href={"/logs?global_task_id=" + task_id + "&num=" + state.triggered_service?.id + "&service_name=" + state.triggered_service?.entity_detail?.component?.name + "&service_env=" + state.triggered_service?.entity_detail?.component_env?.name} 
+                                    target="_blank" 
+                                    className="view-log-btn font-12 avtar font-weight-600"
+                                >
+                                    VIEW LOGS
+                                </a>
+                            </>
+                        ) : (
+                            /* Default - Just View Logs */
+                            <a 
+                                href={"/logs?global_task_id=" + task_id + "&num=" + state.triggered_service?.id + "&service_name=" + state.triggered_service?.entity_detail?.component?.name + "&service_env=" + state.triggered_service?.entity_detail?.component_env?.name} 
+                                target="_blank" 
+                                className="view-log-btn font-12 avtar font-weight-600"
+                            >
+                                VIEW LOGS
+                            </a>
+                        )}
+                        
+                        {/* VIEW PERMISSION button (conditional - only if subtask 2 failed) */}
+                        {state.status == "FAILED" && state.sub_task_status[2]?.status === "FAILED" && (
+                            <Link
+                                to={{
+                                    pathname: "/cluster-permissions",
+                                    state: {
+                                        cluster_id: state.triggered_service ? state.triggered_service.entity_id : null,
+                                        task_id: task_id,
+                                    },
+                                }}
+                            >
+                                <button className="view-permisson-btn font-12 avtar">
+                                    <span className="font-weight-600">VIEW PERMISSION</span>
+                                </button>
+                            </Link>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
