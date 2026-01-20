@@ -1,0 +1,1120 @@
+import React, { useEffect } from "react";
+import { makeStyles } from "@mui/styles";
+import PageHeader from "../../../components/PageHeader";
+import Chip from "../../../components/chip/Chip";
+import { dividerClasses, Popover } from "@mui/material";
+import NewChip from "../../../components/newChip/NewChip";
+import PaginationTwo from "../../../components/PaginationTwo";
+import { useState } from "react";
+import { ExandableComponentList } from "../../../components/hoc/expandableList";
+import InvokeApi from "../../../util/apiInvoker";
+import properties from "../../../properties/properties";
+import GenerateURL, { GenerateSearchURL } from "../../../util/APIUrlProvider";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import BlankPage from "../../../components/BlankPage";
+import { useCustomSnackbar } from "../../../contexts/SnackbarContext";
+import GenericSkeleton from "../../../components/genericComponents/Skeletons/GenericSkeleton";
+import { Loading } from "../../utils/Loading";
+import Delete from "../../../components/genericComponents/Delete";
+import AddSingleVMDialog from "./AddVirtualMachineSet/AddSingleVMDialog";
+import AddVirtualMachineCSV from "./AddVirtualMachineSet/AddVirtualMachineCSV";
+import FetchPublicKeyDialog from "./AddVirtualMachineSet/FetchPublicKeyDialouge";
+import Tooltip from '@mui/material/Tooltip';
+
+const iteration_count = 3;
+
+const useStyles = makeStyles(() => ({
+  root: {
+    backgroundColor: "#fff",
+    padding: "20px",
+    minHeight: "calc(100vh - 70px)",
+
+    "& .table-view": {
+      marginTop: "20px",
+      border: "1px solid #E6E6E6",
+      borderRadius: "6px",
+      display: "grid",
+      gridTemplateColumns: "15% 25% 25% 12% 10% 13%",
+      color: "#787878",
+      fontSize: "12px",
+      overflow: "hidden",
+
+      "& .table-view-row": {
+        borderBottom: "1px solid #E6E6E6",
+        padding: "8px 9px",
+        display: "flex",
+        alignItems: "center",
+        color: "#2F2F2F",
+        overflow: "hidden",
+        minWidth: 0,
+        "&:nth-last-child(-n+6)": {
+          borderBottom: "none",
+        },
+      },
+
+      "& .table-view-row-header": {
+        borderBottom: "1px solid #E6E6E6",
+        padding: "9.5px 12px",
+        display: "flex",
+        alignItems: "center",
+        fontSize: "12px",
+        justifyContent: "flex-start",
+        fontWeight: 600,
+        color: "#2F2F2F",
+      },
+      "& .add_primary_tag": {
+        display: "flex",
+        flexDirection: "row",
+        alignItems: "center",
+        flexWrap: "wrap",
+        gap: "4px",
+        maxWidth: "100%",
+        overflow: "hidden",
+      },
+    },
+  },
+  header: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: "32px",
+    backgroundColor: "#FFFFFF",
+  },
+
+  titleWrapper: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: "8px",
+  },
+
+  title: {
+    fontSize: "16px",
+    fontWeight: 600,
+    color: "#1F2937",
+  },
+
+  actions: {
+    display: "flex",
+    gap: "12px",
+  },
+
+  vmHeader: {
+    display: "flex",
+    alignItems: "center",
+  },
+  vmHeaderEnvTitle: {
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+  },
+}));
+const useStylesPopover = makeStyles((theme) => ({
+  root: {
+    marginLeft: "auto",
+  },
+  popover: {
+    width: "100%",
+    display: "flex",
+    padding: "10px 5px",
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: "5px",
+    borderRadius: "6px",
+    border: "1px solid #F4F4F4",
+    background: "#FFF",
+    boxShadow: "0px 4px 12px 0px rgba(0, 0, 0, 0.08)",
+    "& .menu-link": {
+      color: "#505050",
+      "&:visited": {
+        color: "#505050",
+      },
+    },
+  },
+}));
+const PopoverDropdown = ({
+  name,
+  id,
+  handleRefresh,
+  handleOpenDialog,
+  handleOpenFetchKeyDialog,
+}) => {
+  console.log(id, "fdasflas");
+  const classes = useStylesPopover();
+  const [anchorEl, setAnchorEl] = useState(null);
+
+  const handleClick = (event) => {
+    setAnchorEl(event.currentTarget);
+  };
+
+  const handleClose = () => {
+    setAnchorEl(null);
+  };
+
+  const open = Boolean(anchorEl);
+
+  return (
+    <>
+      <div
+        className={classes.root}
+        style={open ? { borderColor: "#0086FF" } : {}}
+      >
+        <button className="btn " onClick={handleClick}>
+          <span className="ri-more-2-fill font-20"></span>
+        </button>
+      </div>
+
+      <Popover
+        open={open}
+        anchorEl={anchorEl}
+        onClose={handleClose}
+        anchorOrigin={{
+          vertical: "bottom",
+          horizontal: "center",
+        }}
+        transformOrigin={{
+          vertical: "top",
+          horizontal: "center",
+        }}
+        PaperProps={{
+          style: {
+            overflow: "visible",
+            marginTop: "10px",
+            borderRadius: "6px",
+          },
+        }}
+      >
+        <div className={classes.popover} style={{ width: "auto" }}>
+          <div
+            className="font-12 cursor-pointer"
+            style={{ padding: "3px 5px" }}
+          >
+            <button
+              className="menu-link"
+              style={{
+                backgroundColor: "transparent",
+                boxShadow: "none",
+                border: "none",
+              }}
+              onClick={() => {
+                handleOpenDialog(id);
+                handleClose();
+              }}
+            >
+              <span className="ri-edit-line"></span> Edit
+            </button>
+          </div>
+          <div style={{ padding: "3px 5px" }}>
+            <Delete
+              varient="new_ui_versioning"
+              display_data_name={name}
+              data={{
+                entity_id: id,
+                name: "add_virtual_machine",
+                label: "virtual machine",
+              }}
+              refresh={handleRefresh}
+              api_link={GenerateURL(
+                { edit_id: id },
+                properties.api.edit_single_vm
+              )}
+            />
+          </div>
+          <div
+            className="font-12 cursor-pointer"
+            style={{ padding: "3px 5px" }}
+          >
+            <button
+              className="menu-link"
+              style={{
+                backgroundColor: "transparent",
+                boxShadow: "none",
+                border: "none",
+              }}
+              onClick={() => {
+                handleOpenFetchKeyDialog();
+                handleClose();
+              }}
+            >
+              <span className="ri-key-line"></span> Fetch Public Key
+            </button>
+          </div>
+        </div>
+      </Popover>
+    </>
+  );
+};
+
+const SkeletonRow = () => {
+  return (
+    <>
+      <div className="table-view-row">
+        <GenericSkeleton
+          variant={"rect"}
+          width={"auto"}
+          height={"34px"}
+          style={{ borderRadius: "4px" }}
+        />
+      </div>
+      <div className="table-view-row">
+        <GenericSkeleton
+          variant={"rect"}
+          width={"auto"}
+          height={"34px"}
+          style={{ borderRadius: "4px" }}
+        />
+      </div>
+      <div className="table-view-row">
+        <GenericSkeleton
+          variant={"rect"}
+          width={"auto"}
+          height={"34px"}
+          style={{ borderRadius: "4px" }}
+        />
+      </div>
+      <div className="table-view-row">
+        <GenericSkeleton
+          variant={"rect"}
+          width={"auto"}
+          height={"34px"}
+          style={{ borderRadius: "4px" }}
+        />
+      </div>
+      <div className="table-view-row">
+        <GenericSkeleton
+          variant={"rect"}
+          width={"auto"}
+          height={"34px"}
+          style={{ borderRadius: "4px" }}
+        />
+      </div>
+      <div className="table-view-row">
+        <GenericSkeleton
+          variant={"rect"}
+          width={"auto"}
+          height={"34px"}
+          style={{ borderRadius: "4px" }}
+        />
+      </div>
+    </>
+  );
+};
+
+export default function VirtualMachineStatus() {
+  const classes = useStyles();
+  const { vm_group_id } = useParams();
+  const { id } = useParams();
+  const history = useNavigate();
+  const { showSnackbar } = useCustomSnackbar();
+  const [editedItem, setEditedItem] = useState(null);
+
+  const [fetchKeyDialogState, setFetchKeyDialogState] = useState({
+    open: false,
+    vm_name: "",
+    ip_address: "",
+  });
+  const [state, setState] = useState({
+    data: {},
+    error: {},
+    master_envs_list: [],
+    selectedMasterEnv: [],
+    parent_state: null,
+    vm_arr: [],
+    validations: {},
+    curr_page: 1,
+    total_page: 0,
+    count: 0,
+    next: null,
+    previous: null,
+    loading_vms: true,
+    edit_state_loading: false,
+    env_data_loading: false,
+  });
+
+  useEffect(() => {
+    if (id) {
+      fetchVMGroupDataAndSetState(id);
+    }
+  }, [id]);
+
+  useEffect(() => {
+    if (id) {
+      fetchVmOfVMGroups(id, 1);
+    }
+  }, [id]);
+
+  useEffect(() => {
+    if (state.data.environment_master_type) {
+      const filteredEnvs = state.master_envs_list.filter((item) =>
+        state.data.environment_master_type.includes(item.order)
+      );
+
+      setState((new_state) => ({
+        ...new_state,
+        selectedMasterEnv: filteredEnvs,
+      }));
+    }
+  }, [state.master_envs_list, state.data.environment_master_type]);
+
+  useEffect(() => {
+    fetchMasterEnvList();
+  }, []);
+
+  const [openCSVDialog, setOpenCSVDialog] = useState(false);
+  const [open, setOpen] = useState({ open: false, clear_form_flag: false });
+
+  const handleClickOpen = (doClearForm) => {
+    setOpen((prev_state) => ({
+      ...prev_state,
+      open: true,
+      clear_form_flag: doClearForm,
+    }));
+  };
+  const handleClickClose = () => {
+    setOpen((prev_state) => ({
+      ...prev_state,
+      open: false,
+    }));
+  };
+  const getDataAndSetToState = (data) => { };
+  const handleCloseDialogAndFetchVMs = () => {
+    console.log(state.parent_state, "jkdjsjfadfjka");
+    if (state.parent_state && state.parent_state.id) {
+      fetchVmGroups(state.parent_state.id);
+    }
+    setState((new_state) => ({
+      ...new_state,
+      selectedTab: 2,
+      data: {},
+      error: {},
+    }));
+  };
+  const handleClickSSHKeyDialog = () => {
+    handleClickClose();
+    // setOpenDialog(true);
+  };
+
+  const fetchVmGroups = (id) => {
+    var requestInfo = {
+      endPoint: GenerateURL(
+        { edit_id: id },
+        properties.api.edit_vm_group + "?vm_sets=true"
+      ),
+      httpMethod: "GET",
+      httpHeaders: { "Content-Type": "application/json" },
+    };
+
+    InvokeApi(
+      requestInfo,
+      fetchVMGroupDataAndSuccess,
+      fetchVMGroupDataAndFailed
+    );
+    setState((new_state) => ({
+      ...new_state,
+      loading_vms: true,
+    }));
+  };
+  const fetchVmOfVMGroups = (id, pageNumber = 1) => {
+    setState((new_state) => ({
+      ...new_state,
+      loading_vms: true,
+    }));
+
+    // Calculate offset based on page number (6 items per page)
+    const limit = 6;
+    const offset = (pageNumber - 1) * limit;
+
+    var requestInfo = {
+      endPoint: GenerateURL(
+        { edit_id: id },
+        properties.api.edit_vm_group +
+        `?vm_sets=true&limit=${limit}&offset=${offset}`
+      ),
+      httpMethod: "GET",
+      httpHeaders: { "Content-Type": "application/json" },
+    };
+
+    InvokeApi(
+      requestInfo,
+      (data) => fetchVMGroupDataAndSuccess(data, pageNumber),
+      fetchVMGroupDataAndFailed
+    );
+  };
+
+  const fetchVMGroupDataAndSuccess = (data, currentPage) => {
+    // Handle both paginated and non-paginated API responses
+    const vmArray = data.results || data;
+    const totalCount = data.count || (Array.isArray(data) ? data.length : 0);
+
+    setState((new_state) => ({
+      ...new_state,
+      vm_arr: Array.isArray(vmArray) ? vmArray : [],
+      loading_vms: false,
+      curr_page: currentPage,
+      total_page: Math.ceil(totalCount / 6),
+      count: totalCount,
+      next: data.next || null,
+      previous: data.previous || null,
+    }));
+  };
+
+  const fetchVMGroupDataAndFailed = (error) => {
+    showSnackbar(error?.message || "Failed to fetch VM data", "error");
+    setState((new_state) => ({
+      ...new_state,
+      error_vm_arr: error?.message || "Failed to fetch VM data",
+      loading_vms: false,
+    }));
+  };
+
+  const fetchVMGroupDataAndSetState = (id) => {
+    setState((new_state) => ({
+      ...new_state,
+      edit_state_loading: true,
+    }));
+
+    var requestInfo = {
+      endPoint: GenerateURL({ edit_id: id }, properties.api.edit_vm_group),
+      httpMethod: "GET",
+      httpHeaders: { "Content-Type": "application/json" },
+    };
+
+    InvokeApi(
+      requestInfo,
+      fetchVMGroupDataAndSetStateSuccess,
+      fetchVMGroupDataAndSetStateFailed
+    );
+  };
+
+  const fetchVMGroupDataAndSetStateSuccess = (data) => {
+    console.log(data, "VM Group data");
+    setState((new_state) => ({
+      ...new_state,
+      edit_state_loading: false,
+      parent_state: data,
+      data: {
+        ...new_state.data,
+        ...data,
+      },
+    }));
+  };
+
+  const fetchVMGroupDataAndSetStateFailed = (error) => {
+    showSnackbar(error?.message || "Failed to fetch VM group data", "error");
+    setState((new_state) => ({
+      ...new_state,
+      edit_state_loading: false,
+      error_msg: error?.message || "Failed to fetch VM group data",
+    }));
+  };
+
+  function fetchMasterEnvList() {
+    setState((new_state) => ({
+      ...new_state,
+      env_data_loading: true,
+    }));
+
+    var requestInfo = {
+      endPoint: GenerateURL({}, properties.api.master_envs),
+      httpMethod: "GET",
+      httpHeaders: { "Content-Type": "application/json" },
+    };
+
+    InvokeApi(
+      requestInfo,
+      fetchMasterEnvListDataSuccess,
+      fetchMasterEnvListDataFailed
+    );
+  }
+
+  function fetchMasterEnvListDataSuccess(data) {
+    console.log(data, "Master environments data");
+    setState((new_state) => ({
+      ...new_state,
+      master_envs_list: data.map((item) => {
+        return { tabName: item.name, order: item.id };
+      }),
+      env_data_loading: false,
+    }));
+  }
+
+  function fetchMasterEnvListDataFailed(error) {
+    showSnackbar(
+      error?.message || "Failed to fetch master environments",
+      "error"
+    );
+    setState((new_state) => ({
+      ...new_state,
+      error: error,
+      env_data_loading: false,
+    }));
+  }
+
+  function fetchPageInfo(enteredPageNumber) {
+    fetchVmOfVMGroups(id, enteredPageNumber);
+  }
+
+  const handleOpenFetchKeyDialog = (vm_name, ip_address) => {
+    setFetchKeyDialogState((prevState) => ({
+      ...prevState,
+      open: !prevState.open,
+      vm_name,
+      ip_address,
+    }));
+  };
+
+  const handleCloseFetchKeyDialog = () => {
+    setFetchKeyDialogState({
+      open: false,
+      vm_name: "",
+      ip_address: "",
+    });
+  };
+
+  const testConnectionApiHit = (item, index) => {
+    // Add your test connection logic here
+    console.log("Testing connection for:", item.vm_name);
+  };
+
+  const setDataforEdit = (data) => {
+    // Add your edit logic here
+    console.log("Setting data for edit:", data);
+  };
+
+  const fetchPrevInfo = (e, url) => {
+    if (state.previous && state.curr_page > 1) {
+      fetchVmOfVMGroups(id, state.curr_page - 1);
+    }
+  };
+
+  const fetchNextInfo = (e, url) => {
+    if (state.next && state.curr_page < state.total_page) {
+      fetchVmOfVMGroups(id, state.curr_page + 1);
+    }
+  };
+
+  const handleWorkflowPageDataSuccessApiHit = (response, current_page) => {
+    // Add your success handler logic here
+    console.log("Page data success:", response);
+  };
+
+  const fetchAllVMGroupsDataFailed = (error) => {
+    // Add your error handler logic here
+    console.log("Failed to fetch VM groups:", error);
+  };
+
+  return (
+    <div className={classes.root}>
+      <>
+        <div className={classes.vmHeader}>
+          <div style={{ flex: 1, gap: "6px" }}>
+            <PageHeader
+              heading={`Virtual Machine Group: ${state.data.virtual_group_name || "NA"
+                }`}
+              subHeading={
+                <div className={classes.vmHeaderEnvTitle}>
+                  Environment Restriction:
+                  {state.selectedMasterEnv.length > 0 ? (
+                    state.selectedMasterEnv.map((env, index) => {
+                      return (
+                        <NewChip
+                          key={index}
+                          variant={"success"}
+                          label={env.tabName}
+                          shape="standard"
+                        />
+                      );
+                    })
+                  ) : (
+                    <span style={{ marginLeft: "8px", color: "#787878" }}>
+                      None
+                    </span>
+                  )}
+                </div>
+              }
+              primaryButton={{
+                actionType: "onClick",
+                icon: <span className="ri-upload-2-line">&nbsp;</span>,
+                text: "UPLOAD CSV FILE",
+                buttonClass: "btn btn-pagintaion ",
+                action: () => setOpenCSVDialog(true),
+              }}
+              secondaryButton={{
+                actionType: "onClick",
+                icon: <span className="ri-add-line">&nbsp;</span>,
+                text: "ADD MORE",
+                buttonClass: "btn btn-pagintaion",
+                action: () => handleClickOpen(true),
+              }}
+              icon="ri-cpu-line font-24"
+            />
+          </div>
+        </div>
+
+        <div className={classes.header}>
+          <div className={classes.titleWrapper}>
+            <span className={classes.title}>Virtual Machines</span>
+            {/* <Tooltip
+              title="List of Virtual Machines associated with this Virtual Machine Group."
+              arrow
+            > */}
+              <span className="ri-information-line font-16" />
+          </div>
+        </div>
+
+        {state.loading_vms ? (
+          <div
+            style={{ width: "100%", marginTop: "24px" }}
+            className="loading-area"
+          >
+            <div className="table-view">
+              <div className="table-view-row-header">VM Name</div>
+              <div className="table-view-row-header">Primary Tags</div>
+              <div className="table-view-row-header">Secondary Tags</div>
+              <div className="table-view-row-header">IP Address</div>
+              <div className="table-view-row-header">Status</div>
+              <div className="table-view-row-header"></div>
+
+              {Array.from({ length: 5 }).map((_, index) => (
+                <SkeletonRow key={index} />
+              ))}
+            </div>
+          </div>
+        ) : state.vm_arr.length === 0 ? (
+          <div className="table-view">
+            <div className="table-view-row-header">VM Name</div>
+            <div className="table-view-row-header">Primary Tags</div>
+            <div className="table-view-row-header">Secondary Tags</div>
+            <div className="table-view-row-header">IP Address</div>
+            <div className="table-view-row-header">Status</div>
+            <div className="table-view-row-header"></div>
+
+            <BlankPage
+              additionalClass="mb-16"
+              text="No Virtual Machine added"
+              subHeading="Add VM through add more or Upload CSV Above"
+              pageIcon={
+                <span className="ri-cpu-line font-28 color-key-gray"></span>
+              }
+              variant="inside-table"
+              additionalStyles={{
+                padding: "55px 0",
+                textAlign: "center",
+                height: "auto",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gridColumn: "1 / -1",
+              }}
+              backgroundColor="#F4F4F4"
+            />
+          </div>
+        ) : (
+          <div style={{ width: "100%", marginTop: "24px" }}>
+            <div className="table-view">
+              <div className="table-view-row-header">VM Name</div>
+              <div className="table-view-row-header">Primary Tags</div>
+              <div className="table-view-row-header">Secondary Tags</div>
+              <div className="table-view-row-header">IP Address</div>
+              <div className="table-view-row-header">Status</div>
+              <div className="table-view-row-header"></div>
+
+              {state.vm_arr.map((item, index) => {
+                let expandable_add_primary_tag = item["add_primary_tag"]
+                  ? +(item["add_primary_tag"].length - iteration_count)
+                  : null;
+                let expandable_add_secondary_tag = item["add_secondary_tag"]
+                  ? +(item["add_secondary_tag"].length - iteration_count)
+                  : null;
+                return (
+                  <React.Fragment key={index}>
+                    <div className="table-view-row">
+                      {item.vm_name && item.vm_name.length > 20
+                        ? `${item.vm_name.slice(0, 20)}...`
+                        : item.vm_name}
+                    </div>
+                    {/* Primary Tags */}
+                    <div className="table-view-row">
+                      {Array.isArray(item.add_primary_tag) &&
+                        item.add_primary_tag.length > 0 ? (
+                        <div
+                          className="add_primary_tag"
+                          style={{ display: "flex", gap: "4px" }}
+                        >
+                          {item.add_primary_tag
+                            .slice(0, 2)
+                            .map((tag, tagIndex) => (
+                              <NewChip
+                                key={tagIndex}
+                                label={tag}
+                                shape="pill"
+                                variant="info"
+                                size="md"
+                              />
+                            ))}
+
+                          {item.add_primary_tag.length > 2 && (
+                            <Tooltip
+                              title={
+                                <div
+                                  style={{
+                                    display: 'flex',
+                                    flexWrap: 'wrap',
+                                    justifyContent: 'center',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    padding: '4px',
+                                    maxWidth: '300px',
+                                  }}
+                                >
+                                  {item.add_primary_tag.slice(2).map((tag, tagIndex) => (
+                                    <span
+                                      key={tagIndex}
+                                      style={{
+                                        fontSize: '12px',
+                                        backgroundColor: '#eff8ff',
+                                        color: '#175cd3',
+                                        padding: '4px 8px',
+                                        borderRadius: '999px',
+                                        border: '1px solid #b2ddff',
+                                        whiteSpace: 'nowrap',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        maxWidth: '100px',
+                                        textAlign: 'center',
+                                      }}
+                                    >
+                                      {tag}
+                                    </span>
+                                  ))}
+                                </div>
+                              }
+                              arrow
+                              placement="top"
+                              componentsProps={{
+                                tooltip: {
+                                  sx: {
+                                    bgcolor: '#FFFFFF !important',
+                                    backgroundColor: '#FFFFFF !important',
+                                    // border: '1px solid #E6E6E6 !important',
+                                    boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.1) !important',
+                                    borderRadius: '8px !important',
+                                    maxWidth: '400px !important',
+                                    padding: '4px !important',
+                                  },
+                                },
+                                arrow: {
+                                  sx: {
+                                    color: '#FFFFFF !important',
+                                    '&::before': {
+                                      // border: '1px solid #E6E6E6 !important',
+                                      backgroundColor: '#FFFFFF !important',
+                                      boxSizing: 'border-box',
+                                    },
+                                  },
+                                },
+                                popper: {
+                                  sx: {
+                                    '& .MuiTooltip-tooltip': {
+                                      bgcolor: '#FFFFFF !important',
+                                      backgroundColor: '#FFFFFF !important',
+                                      // border: '1px solid #E6E6E6 !important',
+                                      boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.1) !important',
+                                    },
+                                    '& .MuiTooltip-arrow': {
+                                      color: '#FFFFFF !important',
+                                      '&::before': {
+                                        // border: '1px solid #E6E6E6 !important',
+                                        backgroundColor: '#FFFFFF !important',
+                                      },
+                                    },
+                                  },
+                                },
+                              }}
+                            >
+                              <span style={{ cursor: 'pointer' }}>
+                                <NewChip
+                                  label={`+${item.add_primary_tag.length - 2}`}
+                                  shape="pill"
+                                  size="md"
+                                />
+                              </span>
+                            </Tooltip>
+
+                          )}
+                        </div>
+                      ) : (
+                        <span
+                          style={{
+                            backgroundColor: "#f4f4f4",
+                            border: "1px solid #E6E6E6",
+                            fontSize: "10px",
+                            color: "#797979",
+                            padding: "3px 5px",
+                            borderRadius: "4px",
+                            fontWeight: 600,
+                          }}
+                        >
+                          N/A
+                        </span>
+                      )}
+                    </div>
+
+
+                    <div className="table-view-row">
+                      {Array.isArray(item.add_secondary_tag) &&
+                        item.add_secondary_tag.length > 0 ? (
+                        <div
+                          className="add_primary_tag"
+                          style={{ display: "flex", gap: "4px" }}
+                        >
+                          {item.add_secondary_tag
+                            .slice(0, 2)
+                            .map((tag, index) => (
+                              <NewChip
+                                key={index}
+                                label={tag}
+                                shape="pill"
+                                variant="info"
+                                size="md"
+                              />
+                            ))}
+
+                          {item.add_secondary_tag.length > 2 && (
+                            <Tooltip
+                              title={
+                                <div
+                                  style={{
+                                    display: 'flex',
+                                    flexWrap: 'wrap',
+                                    justifyContent: 'center',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    padding: '4px',
+                                    maxWidth: '300px',
+                                  }}
+                                >
+                                  {item.add_secondary_tag.slice(2).map((tag, tagIndex) => (
+                                    <span
+                                      key={tagIndex}
+                                      style={{
+                                        fontSize: '12px',
+                                        backgroundColor: '#eff8ff',
+                                        color: '#175cd3',
+                                        padding: '4px 8px',
+                                        borderRadius: '999px',
+                                        border: '1px solid #b2ddff',
+                                        whiteSpace: 'nowrap',
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        maxWidth: '100px',
+                                        textAlign: 'center',
+                                      }}
+                                    >
+                                      {tag}
+                                    </span>
+                                  ))}
+                                </div>
+                              }
+                              arrow
+                              placement="top"
+                              componentsProps={{
+                                tooltip: {
+                                  sx: {
+                                    bgcolor: '#FFFFFF !important',
+                                    backgroundColor: '#FFFFFF !important',
+                                    // border: '1px solid #E6E6E6 !important',
+                                    boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.1) !important',
+                                    borderRadius: '8px !important',
+                                    maxWidth: '400px !important',
+                                    padding: '4px !important',
+                                  },
+                                },
+                                arrow: {
+                                  sx: {
+                                    color: '#FFFFFF !important',
+                                    '&::before': {
+                                      // border: '1px solid #E6E6E6 !important',
+                                      backgroundColor: '#FFFFFF !important',
+                                      boxSizing: 'border-box',
+                                    },
+                                  },
+                                },
+                                popper: {
+                                  sx: {
+                                    '& .MuiTooltip-tooltip': {
+                                      bgcolor: '#FFFFFF !important',
+                                      backgroundColor: '#FFFFFF !important',
+                                      // border: '1px solid #E6E6E6 !important',
+                                      boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.1) !important',
+                                    },
+                                    '& .MuiTooltip-arrow': {
+                                      color: '#FFFFFF !important',
+                                      '&::before': {
+                                        // border: '1px solid #E6E6E6 !important',
+                                        backgroundColor: '#FFFFFF !important',
+                                      },
+                                    },
+                                  },
+                                },
+                              }}
+                            >
+                              <span style={{ cursor: 'pointer' }}>
+                                <NewChip
+                                  label={`+${item.add_secondary_tag.length - 2}`}
+                                  shape="pill"
+                                  size="md"
+                                />
+                              </span>
+                            </Tooltip>
+
+                          )}
+                        </div>
+                      ) : (
+                        <span
+                          style={{
+                            backgroundColor: "#f4f4f4",
+                            border: "1px solid #E6E6E6",
+                            fontSize: "10px",
+                            color: "#797979",
+                            padding: "3px 5px",
+                            borderRadius: "4px",
+                            fontWeight: 600,
+                          }}
+                        >
+                          N/A
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="table-view-row">
+                      <span className="" style={{ color: "#787878" }}>
+                        {item.ip_address || "N/A"}
+                      </span>
+                    </div>
+                    <div className="table-view-row">
+                      {item.loading ? (
+                        <div className="env_data_loading">
+                          <Loading varient="light" />
+                        </div>
+                      ) : (
+                        <span className="">
+                          {item.status && item.status === "ONLINE" ? (
+                            <NewChip
+                              label={item.status}
+                              shape="standard"
+                              variant="success"
+                            />
+                          ) : (
+                            <NewChip
+                              label={item.status || "OFFLINE"}
+                              shape="standard"
+                              variant="warning"
+                            />
+                          )}
+                        </span>
+                      )}
+                    </div>
+                    <div
+                      className="table-view-row"
+                      style={{
+                        flexDirection: "row",
+                        gap: "4px",
+                        padding: "8px 4px",
+                      }}
+                    >
+                      <div className="d-flex align-center space-between ml-auto">
+                        <button
+                          className="btn btn-outline-primary"
+                          style={{
+                            padding: "4px 8px",
+                            borderRadius: "4px",
+                            fontSize: "11px",
+                            width: "100%",
+                          }}
+                          onClick={() => {
+                            testConnectionApiHit(item, index);
+                          }}
+                        >
+                          Test
+                        </button>
+                        <PopoverDropdown
+                          name={item.vm_name}
+                          id={item.id}
+                          handleOpenDialog={setDataforEdit}
+                          handleRefresh={() => {
+                            fetchVmOfVMGroups(id, 1);
+                          }}
+                          handleOpenFetchKeyDialog={() =>
+                            handleOpenFetchKeyDialog(
+                              item.vm_name,
+                              item.ip_address
+                            )
+                          }
+                        />
+                      </div>
+                    </div>
+                  </React.Fragment>
+                );
+              })}
+            </div>
+
+            {state.vm_arr && state.vm_arr.length > 0 && (
+              <div style={{ marginTop: "24px" }}>
+                <PaginationTwo
+                  current_page_count={state.curr_page}
+                  total_count={state.total_page}
+                  next={state.next}
+                  count={state.count}
+                  previous={state.previous}
+                  on_previous_click={() => {
+                    fetchPrevInfo(null, state.previous);
+                  }}
+                  on_next_click={() => {
+                    fetchNextInfo(null, state.next);
+                  }}
+                  on_pageNumber_click={(pageNumber) => {
+                    fetchPageInfo(pageNumber);
+                  }}
+                />
+              </div>
+            )}
+          </div>
+        )}
+        <AddSingleVMDialog
+
+
+          ///////
+          open={open.open}
+          handleClose={handleClickClose}
+          sendDataToParent={getDataAndSetToState}
+          editedItem={editedItem}
+          prev_state={state.singleVmChildState}
+          clear_form_flag={open.clear_form_flag}
+          vmGroupDetails={state.parent_state}
+          handleCloseDialogAndFetchVMs={handleCloseDialogAndFetchVMs}
+          onClickOpenSSHkeyDialog={handleClickSSHKeyDialog}
+          clearFormFlag={open.clear_form_flag}
+        />
+        <AddVirtualMachineCSV
+          open={openCSVDialog}
+          vmGroupId={id}
+          handleClose={() => setOpenCSVDialog(false)}
+          handleCloseDialogAndFetchVMs={() => {
+            setOpenCSVDialog(false);
+            fetchVmOfVMGroups(id, 1);
+          }}
+        />
+        {fetchKeyDialogState.open && (
+          <FetchPublicKeyDialog
+            user_name={fetchKeyDialogState.vm_name}
+            ip_address={fetchKeyDialogState.ip_address}
+            open={fetchKeyDialogState.open}
+            onClose={handleCloseFetchKeyDialog}
+          />
+        )}
+      </>
+    </div>
+  );
+}
