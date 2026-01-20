@@ -1,0 +1,1079 @@
+import React, { useEffect, useState } from 'react'
+import PropTypes from 'prop-types'
+import { makeStyles } from '@mui/styles';
+import SearchBar from '../../../components/SearchBar';
+import { Loading } from '../../utils/Loading';
+import { Link } from 'react-router-dom';
+import properties from '../../../properties/properties';
+import GenerateURL, { GenerateSearchURL } from '../../../util/APIUrlProvider';
+import InvokeApi from '../../../util/apiInvoker';
+import Grid from '@mui/material/Grid';
+import Popover from '@mui/material/Popover';
+import Delete from '../../../components/genericComponents/Delete';
+import moment from 'moment';
+import PageHeader from '../../../components/PageHeader';
+import PaginationTwo from '../../../components/PaginationTwo';
+import AdvanceSearchFilterCombo from '../../../components/genericComponents/AdvanceSearchFilter/AdvanceSearchFilterCombo';
+import { useNavigate } from "react-router-dom";
+import SquareAvatar from '../../../components/genericComponents/AvatarSquare';
+import GenericSkeleton from '../../../components/genericComponents/Skeletons/GenericSkeleton';
+import BlankPage from '../../../components/BlankPage';
+import PageError from '../../../components/genericComponents/Errors/PageError';
+import Tooltip from '@mui/material/Tooltip';
+import NewChip from '../../../components/newChip/NewChip';
+import AddVirtualMachineDialog from './AddVirtualMachineSet/AddVirtualMachineDialog';
+import Index from '../clusterList/components/Index';
+
+const useStyles = makeStyles(() => ({
+  root: {
+    backgroundColor: "#fff",
+    padding: "20px",
+    minHeight: "calc(100vh - 70px)",
+    "& .table-view": {
+      border: "1px solid #E6E6E6",
+      borderRadius: "6px",
+      display: "grid",
+      gridTemplateColumns: "211px 211px 171px 212px 1fr",
+      fontWeight: 500,
+      color: "#2F2F2F",
+      fontSize: "12px",
+
+      "& .table-view-row": {
+        // borderTop: "1px solid #e6e6e6",
+        borderBottom: "1px solid #e6e6e6",
+        padding: "9.5px 12px",
+        display: "flex",
+        alignItems: "center",
+        fontWeight: 600,
+        color: "#2f2f2f",
+        "&:nth-last-child(-n+5)": {
+          borderBottom: "none",
+        },
+      },
+      "& .table-view-row-header": {
+        padding: " 12px",
+        display: "flex",
+        alignItems: "center",
+        color: "#2F2F2F",
+        borderBottom: "1px solid #e6e6e6",
+      },
+    },
+  },
+  headerSection: {
+    display: "grid",
+    gridTemplateColumns: "480px 1fr",
+    alignItems: "center",
+    '& .search-wrapper': {
+      '& .wrapper-for-search': {
+        border: '1px solid #e6e6e6',
+      }
+    }
+  },
+  //     paginationTwoContainer: {
+  //     '& ul' : {
+  //     listStyle: 'none',
+  //     padding: 0,
+  //     margin: 0,
+  //     display: 'flex',
+  //     alignItems: 'center',  
+  //     gap: '4px'
+  // },        
+  //         '& .btn-selected': {
+  //       border: '1px solid #DBDBDB !important',
+  //       backgroundColor: '#0086FF !important',
+  //       padding: '10px',
+  //       borderRadius: '8px',
+  //       fontSize: '14px',
+  //       fontWeight: '400!important',
+  //       color: '#FFFFFF',
+  //       lineHeight: '1.2',
+  //     },
+  //     '& .btn-transparent': {
+  //       padding: '10px',
+  //       margin: '0px!important',
+  //       fontSize: '14px',
+  //       fontWeight: '500!important',
+  //     //   border: '1px solid #DBDBDB !important',
+  //       lineHeight: '1.2',
+  //       color: '#000000',
+
+  //     }
+  //     },        
+
+  //   tableView: {
+  //     border: "1px solid #E6E6E6",
+  //     // marginTop: '20px',
+  //     borderRadius: "6px",
+  //     display: "grid",
+  //     // gridTemplateColumns: '200px 230px 200px 200px 200px 1fr 50px',
+  //     gridTemplateColumns: "211px 211px 171px 212px 1fr",
+  //     // gap: '12px 0px',
+  //     fontSize: "12px",
+  //     fontWeight: 500,
+  //     color: "#2F2F2F",
+  //   },
+  //   tableViewRowHeader: {
+  //     // borderBottom: '1px solid #e6e6e6',
+  //     padding: " 12px",
+  //     display: "flex",
+  //     alignItems: "center",
+  //     color: "#2F2F2F",
+  //   },
+}))
+
+const VmGroupsListing = (props) => {
+  const classes = useStyles();
+  const [state, setState] = useState({
+    loading: true,
+    all_templates: [],
+    total_page: "",
+    curr_page: "",
+    filtered: false,
+    moreAdvFilterList: [],
+    advFilters: {
+      env: [],
+      name: [],
+    },
+    resetCount: 0,
+    is_filters_applied: false,
+    openDialog: false,
+  });
+  const defaultFilters = ["virtual_group_name", "environment_master_type"];
+  const history = useNavigate();
+  const moreFilterData = [
+    { label: "Restricted Envs", value: "environment_master_type" },
+    { label: "Name", value: "virtual_group_name" },
+  ];
+
+  const resetFilterData = {
+    name: [],
+    env: [],
+  };
+  useEffect(() => {
+    resetAdvFilter();
+  }, []);
+
+  useEffect(() => {
+    isFiltersApplied();
+  }, [state.advFilters]);
+
+  function isFiltersApplied() {
+    let count = 0;
+    Object.keys(state.advFilters).forEach((item) => {
+      if (state.advFilters[item].length > 0) {
+        count = count + 1;
+      }
+    });
+
+    setState((new_state) => ({
+      ...new_state,
+      is_filters_applied: count > 0,
+    }));
+  }
+
+  useEffect(() => {
+    const urlSearchParams = new URLSearchParams(location.search);
+    if (urlSearchParams.size != 0) {
+      let moreAdvFilter = defaultFilters;
+      let advFilters = {};
+      urlSearchParams?.forEach((value, key) => {
+        if (value) {
+          if (key == "adv_search") {
+            let advValue = value;
+            let updatedList = advValue.split(",");
+            updatedList = [...moreAdvFilter, ...updatedList];
+            moreAdvFilter = [...new Set(updatedList)];
+          } else {
+            let filterValue = value;
+            const updatedList = filterValue.split(",");
+            advFilters[key] = updatedList;
+          }
+        }
+      });
+      setState((prevState) => ({
+        ...prevState,
+        moreAdvFilterList: moreAdvFilter,
+        advFilters: { ...advFilters },
+      }));
+      fetchAllVMGroups(advFilters, moreAdvFilter);
+    }
+  }, []);
+
+  function fetchAllVMGroups(data, url) {
+    var requestInfo = {
+      endPoint: GenerateURL({}, properties.api.create_vm_group),
+      httpMethod: "GET",
+      httpHeaders: { "Content-Type": "application/json" },
+    };
+
+    if (data) {
+      requestInfo.endPoint = GenerateSearchURL(data, requestInfo.endPoint);
+    }
+
+    if (url) {
+      requestInfo.endPoint = url;
+    }
+
+    InvokeApi(
+      requestInfo,
+      fetchAllVMGroupsDataSuccess,
+      fetchAllVMGroupsDataFailed
+    );
+
+    setState((new_state) => ({
+      ...new_state,
+      loading: true,
+    }));
+  }
+  function fetchAllVMGroupsDataSuccess(data) {
+    setState((new_state) => ({
+      ...new_state,
+      // all_templates: [], 
+      all_templates: data.results,
+      loading: false,
+      count: data.count,
+      next: data.next ? properties.api.baseURL + data.next : null,
+      previous: data.previous ? properties.api.baseURL + data.previous : null,
+      total_page: Math.ceil(Number(data.count / 10)),
+      curr_page: 1,
+    }));
+  }
+
+  function fetchAllVMGroupsDataFailed(error, statusCode) {
+    setState((new_state) => ({
+      ...new_state,
+      error: error,
+      loading: false,
+      statusCode: statusCode,
+    }));
+  }
+
+  function fetchNextInfo(data, url) {
+    var requestInfo = {
+      endPoint: GenerateURL({}, properties.api.create_vm_group),
+      httpMethod: "GET",
+      httpHeaders: { "Content-Type": "application/json" },
+    };
+
+    if (data) {
+      requestInfo.endPoint = GenerateSearchURL(data, requestInfo.endPoint);
+    }
+
+    if (url) {
+      requestInfo.endPoint = url;
+    }
+
+    setState((prevState) => ({
+      ...prevState,
+      loading: true,
+    }));
+
+    InvokeApi(
+      requestInfo,
+      handleWorkflowNextDataSuccessApiHit,
+      fetchAllVMGroupsDataFailed
+    );
+  }
+  function handleWorkflowNextDataSuccessApiHit(data) {
+    console.log("res success", data);
+    setState((new_state) => ({
+      ...new_state,
+      all_templates: data.results,
+      count: data.count,
+      next: data.next ? properties.api.baseURL + data.next : null,
+      previous: data.previous ? properties.api.baseURL + data.previous : null,
+      page_start: state.page_start + data.results.length,
+      total_page: Math.ceil(Number(data.count / 10)),
+      curr_page: Number(new_state.curr_page + 1),
+      loading: false,
+    }));
+  }
+
+  //prev function
+
+  function fetchPrevInfo(data, url) {
+    var requestInfo = {
+      endPoint: GenerateURL({}, properties.api.create_vm_group),
+      httpMethod: "GET",
+      httpHeaders: { "Content-Type": "application/json" },
+    };
+
+    if (data) {
+      requestInfo.endPoint = GenerateSearchURL(data, requestInfo.endPoint);
+    }
+
+    if (url) {
+      requestInfo.endPoint = url;
+    }
+
+    setState((prevState) => ({
+      ...prevState,
+      loading: true,
+    }));
+    InvokeApi(
+      requestInfo,
+      handleWorkflowPrevDataSuccessApiHit,
+      fetchAllVMGroupsDataFailed
+    );
+  }
+
+  function handleWorkflowPrevDataSuccessApiHit(data) {
+    console.log("res success", data);
+    setState((new_state) => ({
+      ...new_state,
+      all_templates: data.results,
+      count: data.count,
+      next: data.next ? properties.api.baseURL + data.next : null,
+      previous: data.previous ? properties.api.baseURL + data.previous : null,
+      page_start: state.page_start - data.results.length,
+      total_page: Math.ceil(Number(data.count / 10)),
+      curr_page: Number(new_state.curr_page - 1),
+      loading: false,
+    }));
+  }
+
+  function fetchPageInfo(enteredPageNumber) {
+    var requestInfo = {
+      endPoint: GenerateURL({}, properties.api.create_vm_group),
+      httpMethod: "GET",
+      httpHeaders: { "Content-Type": "application/json" },
+    };
+
+    if (enteredPageNumber > 1) {
+      requestInfo.endPoint =
+        requestInfo.endPoint +
+        "?limit=10&offset=" +
+        (enteredPageNumber - 1) * 10;
+    }
+
+    var current_page = enteredPageNumber;
+    setState((prevState) => ({
+      ...prevState,
+      loading: true,
+    }));
+    InvokeApi(
+      requestInfo,
+      (response) => {
+        handleWorkflowPageDataSuccessApiHit(response, current_page);
+      },
+      fetchAllVMGroupsDataFailed
+    );
+  }
+  function handleWorkflowPageDataSuccessApiHit(data, count) {
+    setState((new_state) => ({
+      ...new_state,
+      all_templates: data.results,
+      count: data.count,
+      next: data.next ? properties.api.baseURL + data.next : null,
+      previous: data.previous ? properties.api.baseURL + data.previous : null,
+      page_start: state.page_start + data.results.length,
+      total_page: Math.ceil(Number(data.count / 10)),
+      curr_page: Number(count),
+      loading: false,
+    }));
+  }
+
+  function generateFilterContainURL(baseURL, listDict, activeFilters) {
+    var searchParams = "";
+    const filtersKeyArray = Object.keys(listDict);
+    let i = 0;
+    const activeFilterList = activeFilters || state.moreAdvFilterList;
+    filtersKeyArray.forEach((key) => {
+      const arrayFilterValues = listDict[key];
+      if (
+        arrayFilterValues.length > 0 &&
+        isFilterActive(key, activeFilterList)
+      ) {
+        if (i != 0) {
+          searchParams += "&";
+        }
+        var arrayString = arrayFilterValues;
+        const stringKey = `${key}=${arrayString}`;
+        searchParams += stringKey;
+        i++;
+      }
+    });
+
+    const finalUrl = baseURL + "?" + searchParams.toString();
+
+    return finalUrl;
+  }
+
+  const onUpdateHandle = (uniqueId, updatedList) => {
+    let updatedKey = "";
+    if (uniqueId === "more-button-adv-0") {
+      addFiltersToUrl("adv_search", updatedList);
+      if (updatedList?.length == 0) {
+        resetAdvFilter();
+      } else {
+        setState((prevState) => ({
+          ...prevState,
+          moreAdvFilterList: updatedList,
+        }));
+      }
+    } else {
+      if (uniqueId == "name_adv_1") {
+        updatedKey = "virtual_group_name";
+      }
+      if (uniqueId == "env_id_adv_2") {
+        updatedKey = "environment_master_type";
+      }
+
+      const normalizedValues = updatedList.map(item =>
+        typeof item === "object" ? item.value : item
+      );
+
+      setState((prevState) => ({
+        ...prevState,
+        advFilters: {
+          ...prevState.advFilters,
+          [updatedKey]: normalizedValues,
+        },
+      }));
+      addFiltersToUrl(updatedKey, normalizedValues);
+      const advFilters = state.advFilters;
+      advFilters[updatedKey] = normalizedValues;
+      fetchAllVMGroups(advFilters);
+    }
+  };
+
+  const resetAdvFilter = () => {
+    fetchAllVMGroups(resetFilterData);
+    addFiltersToUrl("all_delete");
+    setState((prevState) => ({
+      ...prevState,
+      moreAdvFilterList: defaultFilters,
+      advFilters: resetFilterData,
+      resetCount: prevState.resetCount + 1,
+    }));
+
+    // will call here normal function
+  };
+
+  const addFiltersToUrl = (filterName, filterValue) => {
+    let urlSearchParams = new URLSearchParams(location.search);
+    const allFilters = ["Name", "env"];
+
+    if (filterName == "all_delete") {
+      urlSearchParams = "";
+    } else {
+      if (filterName == "adv_search") {
+        allFilters.forEach((value) => {
+          if (!filterValue.includes(value)) {
+            urlSearchParams.delete(value);
+          }
+        });
+      }
+
+      if (filterValue?.length == 0) {
+        urlSearchParams.delete(filterName);
+      } else {
+        if (urlSearchParams.has(filterName)) {
+          urlSearchParams.set(filterName, filterValue.join(","));
+        } else {
+          urlSearchParams.append(filterName, filterValue.join(","));
+        }
+      }
+    }
+
+    history({
+      pathname: location.pathname,
+      search: urlSearchParams.toString(),
+    });
+  };
+
+  function filterDataParseForVMName(data) {
+    const updatedList = data?.map((item) => {
+      return {
+        label: item.virtual_group_name,
+        value: item.virtual_group_name,
+        ...item,
+      };
+    });
+    console.log("filtered list :", updatedList)
+    return updatedList;
+  }
+
+  function filterDataParseForVMEnvs(data) {
+    const envMap = new Map();
+
+    data?.forEach((item) => {
+      item.env_obj?.forEach((env) => {
+        if (!envMap.has(env.id)) {
+          envMap.set(env.id, {
+            label: env.name.toUpperCase(),
+            value: env.id,
+          });
+        }
+      });
+    });
+
+    return Array.from(envMap.values());
+  }
+
+
+  const getEnvChipVariant = (envName) => {
+    if (!envName) return 'light';
+
+    const env = envName.toLowerCase().trim();
+
+    const variantMap = {
+      'dev': 'info',
+      'development': 'info',
+      'prod': 'highlight',
+      'production': 'highlight',
+      'uat': 'warning',
+      'qa': 'success',
+      'quality': 'success',
+      'staging': 'error',
+      'stage': 'error',
+    };
+
+    return variantMap[env] || 'light';
+  };
+
+  const advanceFilterJson = {
+    virtual_group_name: {
+      staticList: false,
+      labelName: "Name",
+      uniqueId: "name_adv_1",
+      searchVariable: "virtual_group_name",
+      getFetchUrl: properties.api.create_vm_group,
+      searchUrl: properties.api.create_vm_group,
+      filterDataPraseFunction: filterDataParseForVMName,
+    },
+    // 'tag': {
+    //     staticList: false,
+    //     labelName: 'Tag',
+    //     uniqueId: 'tag_adv_3',
+    //     searchVariable: 'tag',
+    //     getFetchUrl: properties.api.create_vm_group,
+    //     searchUrl: properties.api.create_vm_group,
+    //     filterDataPraseFunction: filterDataParseForVMTags,
+    //     showMoreNotRequired: true
+    // },
+    environment_master_type: {
+      staticList: false,
+      uniqueId: "env_id_adv_2",
+      labelName: "env",
+      searchVariable: "environment_master_type",
+      getFetchUrl: properties.api.create_vm_group,
+      searchUrl: properties.api.create_vm_group,
+      filterDataPraseFunction: filterDataParseForVMEnvs,
+      // showMoreNotRequired: true,
+    },
+  };
+  const handleOpenDialog = (editItem = null) => {
+    setState((prevState) => ({
+      ...prevState,
+      openDialog: true,
+      editData: editItem,
+    }));
+  };
+  const handleCloseDialog = () => {
+    setState((prevState) => ({
+      ...prevState,
+      openDialog: false,
+      editData: null,
+    }));
+  };
+  const handleDialogSuccess = (response) => {
+    fetchAllVMGroups(state.advFilters);
+  };
+  return (
+    <div className={classes.root}>
+      {state.loading ? (
+        <>
+          <div className="table-view mb-20 mt-20">
+            <div className="table-view-row-header">Virtual Machine Set</div>
+            <div className="table-view-row-header">Mapped Envs</div>
+            <div className="table-view-row-header">VMs Connected</div>
+            <div className="table-view-row-header">Last Edited</div>
+            <div className="table-view-row-header"></div>
+            <>
+              {Array.from({ length: 10 }).map((item) => {
+                return <SkeletonRow />;
+              })}
+            </>
+          </div>
+        </>
+      ) : state.error ? (
+        <PageError error={state.error} statusCode={state?.statusCode} />
+      ) : state.all_templates.length > 0 ? (
+        <div>
+          <div className={classes.headerSection}>
+            <PageHeader
+              heading="Virtual Machine Group"
+              subHeading="Displaying all connected and disconnected virtual machines"
+              icon="ri-cpu-line"
+              primaryButton={null}
+              commonDivMargin={false}
+            />
+
+            <div
+              className="d-grid"
+              style={{
+                gridTemplateColumns: "320px 160px",
+                gap: "10px",
+                justifyContent: "end",
+              }}
+            >
+              <div className="search-wrapper"></div>
+
+              <button
+                onClick={() => handleOpenDialog()}
+                className="btn btn-primary mr-0"
+                style={{ marginRight: 0 }}
+              >
+                <span className="ri-add-line width-24px height-24px"></span>
+                &nbsp;Add VM Group
+              </button>
+            </div>
+            {state.count != 0 ? (
+              <div
+                style={{
+                  display: "grid",
+                  marginBottom: "12px",
+                  width: "100%",
+                  marginTop: "34px",
+
+                }}
+              >
+                <Grid container alignItems="center" wrap="nowrap" >
+                  {state.moreAdvFilterList?.map((filterName) => {
+                    return (
+                      <div key={filterName} className="ad-more-search" style={{ whiteSpace: "nowrap" }}>
+                        <AdvanceSearchFilterCombo
+                          reset={state.resetCount}
+                          selectedCheckBoxes={state.advFilters[filterName]}
+                          searchVariable={
+                            advanceFilterJson[filterName]["searchVariable"]
+                          }
+                          staticList={
+                            advanceFilterJson[filterName]["staticList"]
+                          }
+                          uniqueId={advanceFilterJson[filterName]["uniqueId"]}
+                          labelName={
+                            advanceFilterJson[filterName]["labelName"]
+                          }
+                          searchUrl={
+                            advanceFilterJson[filterName]["searchUrl"]
+                          }
+                          onUpdate={onUpdateHandle}
+                          getFetchUrl={
+                            advanceFilterJson[filterName]["getFetchUrl"]
+                          }
+                          placeholder_name={
+                            advanceFilterJson[filterName]["placeholder_name"]
+                          }
+                          placeholder_value={
+                            advanceFilterJson[filterName]["placeholder_value"]
+                          }
+                          filterDataPraseFunction={
+                            advanceFilterJson[filterName][
+                            "filterDataPraseFunction"
+                            ]
+                          }
+                          showMoreNotRequired={
+                            advanceFilterJson[filterName][
+                            "showMoreNotRequired"
+                            ]
+                          }
+                        />
+                      </div>
+                    );
+                  })}
+                  <div className="ad-more-search" style={{ whiteSpace: "nowrap" }}>
+                    <AdvanceSearchFilterCombo
+                      selectedCheckBoxes={state.moreAdvFilterList}
+                      reset={state.resetCount}
+                      staticList={moreFilterData}
+                      autoClosedAfterSelection={true}
+                      onUpdate={onUpdateHandle}
+                      variant="more-button"
+                      uniqueId="more-button-adv-0"
+                    />
+                  </div>
+
+                  <div
+                    onKeyDown={() => { }}
+                    onClick={resetAdvFilter}
+                    className="pl-15 ml-20 d-flex align-center justify-center cursor-pointer"
+                    style={{
+                      borderLeft: "1px solid #dedede",
+                      height: "40px",
+                      flexShrink: 0
+                    }}
+                    tabIndex={0}
+                    role="button"
+                  >
+                    <span
+                      style={{ color: "#595353" }}
+                      className="font-13 cursor-pointer"
+                    >
+                      Reset
+                    </span>
+                  </div>
+                </Grid>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="table-view mb-20 mt-20">
+            <div className="table-view-row-header">Virtual Machine Set</div>
+            <div className="table-view-row-header">Mapped Envs</div>
+            <div className="table-view-row-header">VMs Connected</div>
+            <div className="table-view-row-header">Last Edited</div>
+            <div className="table-view-row-header"></div>
+            {state.all_templates.map((item) => {
+              return (
+                <>
+                  <div className="table-view-row gap-12px">
+                    <SquareAvatar
+                      varient="double"
+                      shape="sm-box"
+                      name={item.virtual_group_name}
+                    />{" "}
+                    &nbsp;&nbsp;
+                    <Tooltip
+                      title={item.virtual_group_name}
+                      arrow
+                      placement="top"
+                    >
+                      <Link
+                        to={`/vm-group/${item.id}/vm/list`}
+                        className="text-anchor-blue"
+                        style={{
+                          maxWidth: "180px",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                          display: "inline-block",
+                        }}
+                      >
+                        {item.virtual_group_name}
+                      </Link>
+                    </Tooltip>
+                  </div>
+                  <div
+                    className="table-view-row "
+                    style={{ gap: "6px", flexWrap: "wrap" }}
+                  >
+                    {item.env_obj.slice(0, 2).map((env) => {
+                      return (
+                        <>
+                          <NewChip
+                            label={env.name.toUpperCase()}
+                            variant={getEnvChipVariant(env.name)}
+                            size="lg"
+                            shape="standard"
+                          />
+                        </>
+                      );
+                    })}
+                    {item.env_obj.length > 2 && (
+                       <Tooltip
+                                                    title={
+                                                      <div
+                                                        style={{
+                                                          display: 'flex',
+                                                          flexWrap: 'wrap',
+                                                          justifyContent: 'center',
+                                                          alignItems: 'center',
+                                                          gap: '6px',
+                                                          padding: '4px',
+                                                          maxWidth: '300px',
+                                                        }}
+                                                      >
+                                                        {item.env_obj.slice(0, 2).map((env, envIndex) => (
+                                                          <span
+                                                            key={envIndex}
+                                                            style={{
+                                                              fontSize: '12px',
+                                                              backgroundColor: '#eff8ff',
+                                                              color: '#175cd3',
+                                                              padding: '4px 8px',
+                                                              borderRadius: '999px',
+                                                              border: '1px solid #b2ddff',
+                                                              whiteSpace: 'nowrap',
+                                                              overflow: 'hidden',
+                                                              textOverflow: 'ellipsis',
+                                                              maxWidth: '100px',
+                                                              textAlign: 'center',
+                                                            }}
+                                                          >
+                                                            {/* {tag} */}
+                                                          </span>
+                                                        ))}
+                                                      </div>
+                                                    }
+                                                    arrow
+                                                    placement="top"
+                                                    componentsProps={{
+                                                      tooltip: {
+                                                        sx: {
+                                                          bgcolor: '#FFFFFF !important',
+                                                          backgroundColor: '#FFFFFF !important',
+                                                          // border: '1px solid #E6E6E6 !important',
+                                                          boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.1) !important',
+                                                          borderRadius: '8px !important',
+                                                          maxWidth: '400px !important',
+                                                          padding: '4px !important',
+                                                        },
+                                                      },
+                                                      arrow: {
+                                                        sx: {
+                                                          color: '#FFFFFF !important',
+                                                          '&::before': {
+                                                            // border: '1px solid #E6E6E6 !important',
+                                                            backgroundColor: '#FFFFFF !important',
+                                                            boxSizing: 'border-box',
+                                                          },
+                                                        },
+                                                      },
+                                                      popper: {
+                                                        sx: {
+                                                          '& .MuiTooltip-tooltip': {
+                                                            bgcolor: '#FFFFFF !important',
+                                                            backgroundColor: '#FFFFFF !important',
+                                                            // border: '1px solid #E6E6E6 !important',
+                                                            boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.1) !important',
+                                                          },
+                                                          '& .MuiTooltip-arrow': {
+                                                            color: '#FFFFFF !important',
+                                                            '&::before': {
+                                                              // border: '1px solid #E6E6E6 !important',
+                                                              backgroundColor: '#FFFFFF !important',
+                                                            },
+                                                          },
+                                                        },
+                                                      },
+                                                    }}
+                                                  ></Tooltip>
+                      
+                      // <NewChip
+                      //   label={`+${item.env_obj.length - 2}`}
+                      //   shape="pill"
+                      //   size="md"
+                      // />
+                    )}
+                  </div>
+                  <div className="table-view-row font-weight-500">
+                    {item.virtual_machines && item.virtual_machines.length > 0
+                      ? `${item.virtual_machines.filter(
+                        (vm) => vm.status === "ONLINE"
+                      ).length
+                      } / ${item.virtual_machines.length}`
+                      : "N/A"}
+                  </div>
+                  <div className="table-view-row font-weight-500">
+                    {item.updated_at
+                      ? moment(item.updated_at).fromNow()
+                      : moment().fromNow()}
+                  </div>
+                  <div
+                    className="table-view-row"
+                    style={{ justifySelf: "end", width: "100%" }}
+                  >
+                    <PopoverDropdown
+                      name={item.virtual_group_name}
+                      id={item.id}
+                      handleRefresh={fetchAllVMGroups}
+                      handleEdit={() => handleOpenDialog(item)}
+                    />
+                  </div>
+                </>
+              );
+            })}
+          </div>
+          {/* <div className={classes.paginationTwoContainer}> */}
+          <PaginationTwo
+            current_page_count={state.curr_page}
+            total_count={state.total_page}
+            next={state.next}
+            count={state.count}
+            previous={state.previous}
+            on_previous_click={() => {
+              fetchPrevInfo(null, state.previous);
+            }}
+            on_next_click={() => {
+              fetchNextInfo(null, state.next);
+            }}
+            on_pageNumber_click={(pageNumber) => {
+              fetchPageInfo(pageNumber);
+            }}
+          />
+          {/* </div> */}
+        </div>
+      ) : (
+        <>
+          <BlankPage
+            pageIcon={
+              <span className="ri-cpu-line font-28 text-anchor-blue"></span>
+            }
+            text={"You have no VM group added"}
+            primaryButton={{
+              actionType: "link",
+              action: "/vm-group/configure",
+              icon: <span className="ri-add-line font-14"></span>,
+              text: "Add VM Group",
+              buttonClass: "btn-primary m-auto",
+            }}
+          />
+        </>
+      )}
+      <AddVirtualMachineDialog
+        open={state.openDialog}
+        handleClose={handleCloseDialog}
+        handleSuccess={handleDialogSuccess}
+        editData={state.editData}
+      />
+    </div>
+  );
+}
+
+VmGroupsListing.propTypes = {}
+
+export default VmGroupsListing;
+
+
+const PopoverDropdown = ({ name, id, handleRefresh, handleEdit }) => {
+  const classes = useStylesPopover();
+  const [anchorEl, setAnchorEl] = useState(null);
+  const [state, setState] = useState({
+
+  })
+
+  const handleClick = (event) => {
+    setAnchorEl(event.currentTarget);
+  };
+
+  const handleClose = () => {
+    setAnchorEl(null);
+  };
+
+  const open = Boolean(anchorEl);
+
+  return (
+    <>
+      <div className={classes.root} style={open ? { borderColor: "#0086FF" } : {}} >
+        <button className="btn btn-transparent" onClick={handleClick}>
+          <span className='ri-more-2-fill font-20'></span>
+        </button>
+      </div>
+
+      <Popover
+        open={open}
+        anchorEl={anchorEl}
+        onClose={handleClose}
+        anchorOrigin={{
+          vertical: 'bottom',
+          horizontal: 'center',
+        }}
+        transformOrigin={{
+          vertical: 'top',
+          horizontal: 'center',
+        }}
+        PaperProps={{ style: { overflow: 'visible', marginTop: "10px", borderRadius: "6px", } }}
+      >
+        <div className={classes.popover} style={{ width: 'auto' }}>
+          <div className='font-12 cursor-pointer' style={{ padding: '3px 5px' }} onClick={() => { handleEdit && handleEdit(); handleClose(); }}>
+            {/* <Link className="menu-link" to={`/vm-group/${id}/edit`}> */}
+            <span className='ri-edit-line'></span> Edit
+            {/* </Link> */}
+
+          </div>
+          <div style={{ padding: '3px 5px' }}>
+            <Delete
+              varient="new_ui_versioning"
+              display_data_name={name}
+              data={{ entity_id: id, name: "virtual_group_name", label: 'virtual group' }}
+              refresh={handleRefresh}
+              api_link={GenerateURL({ edit_id: id }, properties.api.edit_vm_group)}
+            />
+          </div>
+        </div>
+      </Popover>
+    </>
+
+  )
+}
+
+const useStylesPopover = makeStyles((theme) => ({
+  root: {
+    marginLeft: 'auto'
+
+  },
+  popover: {
+    //width: "100%",
+    display: "flex",
+    padding: '10px 5px',
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: "5px",
+    borderRadius: "6px",
+    border: "1px solid #F4F4F4",
+    background: "#FFF",
+    boxShadow: "0px 4px 12px 0px rgba(0, 0, 0, 0.08)",
+    '& .menu-link': {
+      color: '#505050',
+      '&:hover': {
+        color: '#505050',
+      },
+      '&:visited': {
+        color: '#505050',
+      }
+    }
+  }
+}))
+
+
+const SkeletonRow = () => {
+  return (
+    <>
+      <div className="table-view-row">
+        <GenericSkeleton
+          variant={"rect"}
+          width={"auto"}
+          height={"34px"}
+          style={{ borderRadius: "4px" }}
+        />
+      </div>
+      <div className="table-view-row">
+        <GenericSkeleton
+          variant={"rect"}
+          width={"auto"}
+          height={"34px"}
+          style={{ borderRadius: "4px" }}
+        />
+      </div>
+      <div className="table-view-row">
+        <GenericSkeleton
+          variant={"rect"}
+          width={"auto"}
+          height={"34px"}
+          style={{ borderRadius: "4px" }}
+        />
+      </div>
+      <div className="table-view-row">
+        <GenericSkeleton
+          variant={"rect"}
+          width={"auto"}
+          height={"34px"}
+          style={{ borderRadius: "4px" }}
+        />
+      </div>
+      <div
+        className="table-view-row"
+        style={{ justifySelf: "end", width: "100%" }}
+      >
+        <GenericSkeleton
+          variant={"rect"}
+          width={"auto"}
+          height={"34px"}
+          style={{ borderRadius: "4px" }}
+        />
+      </div>
+    </>
+  );
+};
