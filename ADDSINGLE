@@ -1,0 +1,690 @@
+import React, { useEffect, useState } from 'react'
+import { makeStyles } from '@mui/styles';
+import Dialog from '@mui/material/Dialog';
+import { VALIDATION_TYPE_REQUIRED, ValidateDataSet } from '../../../../util/Validator';
+import { getCommonFunctions } from '../../../serviceRevamp/add/ci_flow/SourceDetails';
+import Grid from '@mui/material/Grid';
+import Snackbar from '@mui/material/Snackbar';
+import { Input } from '../../../../components/genericComponents/Input';
+import { Loading } from '../../../utils/Loading';
+import properties from '../../../../properties/properties';
+import GenerateURL from '../../../../util/APIUrlProvider';
+import InvokeApi, { PostData } from '../../../../util/apiInvoker';
+import CopySSHkeyDialog from './CopySSHkeyDialog';
+import StepProgressDetailed from '../../../../components/genericComponents/StepProgressDetailed';
+import { showErrorHandlerUpdated } from '../../../../util/util';
+import AlertStrip from '../../../../components/AlertStrips';
+import PublicKeyResultDialog from './CopyPublicKeyDialouge';
+import SshKeys from '../../../integrations/secrets/components/SshKeys';
+import { Link, Navigate, useParams } from 'react-router-dom';
+import { Box } from '@mui/material';
+
+export const addSingleVMDefaultState = () => {
+    return {
+        data: {
+            add_primary_tag: [],
+            add_secondary_tag: []
+        },
+        // task_id: "09df5fcf-e564-40bc-9ad2-f9464338d634",
+        error: {},
+        showLeftPanel: true,
+        loading_data: false,
+        available_monitoring_resource_list: [],
+        credential_list: [],
+        validations: {
+        }
+    }
+}
+const AddSingleVMDialog = ({ ...props }) => {
+    const classes = useStyles();
+    const { id: routeId } = useParams();
+    const open = props.open;
+    const clear_form_flag = props.clear_form_flag ? props.clear_form_flag : false;
+    const edit_id = props.edit_id ? props.edit_id : null;
+    const handleClose = props.handleClose ? props.handleClose : () => { };
+    const vmGroupDetails = props.vmGroupDetails ? props.vmGroupDetails : {};
+    const handleCloseDialogAndFetchVMs = props.handleCloseDialogAndFetchVMs ? props.handleCloseDialogAndFetchVMs : () => { };
+    const prev_state = props.prev_state ? props.prev_state : null
+    const [state, setState] = useState(prev_state ? prev_state : addSingleVMDefaultState())
+    const [openKeyDialog, setOpenKeyDialog] = useState(false);
+    // const [sshKey, setSshKey] = useState('');
+    const [sshKey, setSshKey] = useState("ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDL34r9RuLg8cd7F7wTVIRum1loo5pEnNhs9d9onaq7uun5X1Hi2J7jEehueyjUQoLa2sz9NZgN4vPDBQ2KNVtnmSwdIV3CEbhpIhS2vyNI/MvBlBXolFgvG3xP+85Lj0iHQST18fiLPUZSUtdIjpbLmz5arY/5IUlF8sUULKNZu4sDpOGuATUheigmMjylnc1kr7O25ILYHVbFdXoz8HGnFgnifWpKpUadvwiyGmp3NlZnRgY9XXp0n/RZMLUKgfyuKl/I8SnAvu6K6O2Uz5WKcFLoKrVNB9rcLXzBP32Kvia6QPm0IeROeEsyJNe3zRVdRVpoLIg2LhwlOUKkO2+J root@ot-app");
+
+    const [showInput, setShowInput] = useState(false);
+    const [data, setData] = useState({ data: {}, error: {} })
+    const commonFunctions = getCommonFunctions(state, setState, {})
+    const showInfoSection = JSON.parse(localStorage.getItem('monitoring_source_dialog_display_flag'));
+    const [showLoading, setShowLoading] = useState(false);
+    const [credentialsList, setCredentailList] = useState([])
+    const [credentialsLoading, setCredentailLoading] = useState(false);
+    const onClickOpenSSHkeyDialog = props.onClickOpenSSHkeyDialog ? props.onClickOpenSSHkeyDialog : () => { }
+    const [saveLoading, setSaveLoading] = useState(false);
+    useEffect(() => {
+        console.log(prev_state, 'data_0')
+        state.task_id == undefined && open && fetchCredentials();
+
+        setShowLoading(true);
+        setState((new_state) => ({
+            ...new_state,
+            ...prev_state
+        }));
+        setTimeout(() => {
+            setShowLoading(false)
+        }, 200);
+    }, [prev_state, state.task_id, open])
+
+    console.log(state, 'data_state_0sdsdsdsd')
+    useEffect(() => {
+        console.log(clear_form_flag, 'data_1')
+        clear_form_flag &&
+            setState(new_state => ({
+                ...new_state,
+                data: {
+                    add_primary_tag: [],
+                    add_secondary_tag: [],
+                    user_name: '',
+                    ip_address: '',
+                    vm_name: '',
+                    port: '',
+                    collection_method: '',
+                    credential: ''
+
+                },
+                error: {},
+                showLeftPanel: true,
+                loading_data: false,
+                available_monitoring_resource_list: [],
+                credential_list: [],
+                validations: {
+
+                }
+            }));
+
+    }, [clear_form_flag])
+
+    const handleCloseLeftStip = () => {
+        if (data?.data?.dont_show_again) {
+            setDataToLocalStorage()
+        }
+        setState(new_state => ({
+            ...new_state,
+            showLeftPanel: false
+        }));
+    }
+    function setDataToLocalStorage() {
+        localStorage.setItem('monitoring_source_dialog_display_flag', data.data.dont_show_again);
+    }
+    function onChangeDoNotshow(e) {
+        var key = e.target.name;
+        var value = e.target.value;
+        if (key == "dont_show_again") {
+            value = !data.data.dont_show_again;
+        }
+        setData((prevState) => ({
+            ...prevState,
+            data: {
+                ...prevState.data,
+                [key]: value,
+            },
+            error: {
+                ...prevState.error,
+                [key]: '', // Reset error on change
+            },
+        }));
+    }
+
+    const handleCloseAlert = () => {
+        setState({ ...state, show_save_msg: null, });
+    };
+
+    const testAndSaveData = () => {
+        let validations = {
+            user_name: [VALIDATION_TYPE_REQUIRED],
+            ip_address: [VALIDATION_TYPE_REQUIRED],
+            vm_name: [VALIDATION_TYPE_REQUIRED],
+            port: [VALIDATION_TYPE_REQUIRED],
+            // add_primary_tag: [VALIDATION_TYPE_REQUIRED],
+            // add_secondary_tag: [VALIDATION_TYPE_REQUIRED],
+            collection_method: [VALIDATION_TYPE_REQUIRED],
+        }
+        console.log("****************************", validations)
+        if (state.data.collection_method == "USERNAME_PASSWORD") {
+            validations['credential'] = [VALIDATION_TYPE_REQUIRED]
+        }
+        var result = ValidateDataSet(state.data, validations);
+        console.log("****************************", result);
+        if (result) {
+            var basic_details = {};
+            basic_details = {
+                ...state.data,
+                "vm_set": vmGroupDetails && vmGroupDetails.id
+            };
+            if (prev_state && prev_state.data && prev_state.data.id) {
+                var post_url = GenerateURL({ edit_id: prev_state.data.id }, properties.api.edit_single_vm);
+            } else {
+                var post_url = GenerateURL({}, properties.api.add_single_vm);
+            }
+            setSaveLoading(true);
+            PostData(post_url, basic_details, onSaveSuccess, onSaveFail);
+        } else {
+            setSaveLoading(false);
+            setState((new_state) => ({
+                ...new_state,
+                error: {
+                    ...new_state.error,
+                    ...result.error
+                }
+            }));
+        }
+    }
+
+    const onSaveSuccess = (response) => {
+        setSaveLoading(false);
+        if (response && response.task) {
+            setState((new_state) => ({
+                ...new_state,
+                task_id: response.task
+            }));
+        } else {
+            closeDialogAndGetAttachedVMS();
+        }
+
+    }
+    const onSaveFail = (error) => {
+        setSaveLoading(false);
+        const error_msg = showErrorHandlerUpdated(error)
+        setState((new_state) => ({
+            ...new_state,
+            error: {
+                ...new_state.error,
+                ...error
+            },
+            error_msg: error_msg
+        }));
+
+    }
+
+    const closeDialogAndGetAttachedVMS = () => {
+
+        handleCloseDialogAndFetchVMs();
+        handleClose();
+        setState((new_state) => ({
+            ...new_state,
+            task_id: null,
+            data: {},
+            error: {},
+            showLeftPanel: true,
+            loading_data: false,
+            available_monitoring_resource_list: [],
+            credential_list: [],
+            validations: {
+            }
+        }));
+    }
+    function onChangeHandlerForKeyValue(key, value) {
+        setState({
+            ...state,
+            data: {
+                ...state.data,
+                [key]: value
+            },
+            error: {
+                ...state.error,
+                [key]: null,
+            }
+        });
+    }
+
+    function fetchCredentials() {
+
+        var requestInfo = {
+            endPoint: GenerateURL({}, properties.api.credential_all),
+            httpMethod: "GET",
+            httpHeaders: { "Content-Type": "application/json" }
+        }
+
+        requestInfo.endPoint = requestInfo.endPoint + "?all=true";
+        setCredentailLoading(true);
+        InvokeApi(requestInfo, CredentialsFetchSuccess, CredentialsFetchFailure);
+
+    }
+
+    function CredentialsFetchSuccess(data) {
+
+        if (data && data.results) {
+            var credentials = data.results.length > 0 ? data.results.map(
+
+                item => {
+                    console.log(item, "fdsanfjknsajk")
+                    return {
+                        id: item.id,
+                        label: item.name
+                    }
+                }
+            ) : []
+            setCredentailList(credentials)
+            setCredentailLoading(false)
+
+        } else {
+            setCredentailLoading(false);
+        }
+
+    }
+
+    function CredentialsFetchFailure(error, exception) {
+
+        setCredentailList([])
+        setCredentailLoading(false)
+    };
+
+    console.log(saveLoading, 'creds_data_09jsd')
+    const connectionMethodList = [
+        { "label": "SSH Key", id: "SSH_KEY" },
+        { "label": "Username Password", id: "USERNAME_PASSWORD" }
+    ]
+    return (
+        <>
+
+            <Dialog
+                fullWidth={true}
+                maxWidth={'md'}
+                open={open}
+                onClose={handleClose}
+                className={`${classes.root} dialog-align-corner`}
+                aria-labelledby="max-width-dialog-title"
+            >
+                <div className='d-grid ml-auto dialog-sub-component' style={{ gridTemplateColumns: '396px 650px' }}>
+                    {
+                        !showInfoSection &&
+
+                        <div className={state.showLeftPanel ? 'left-panel-dialog bg-white position-relative' : 'left-panel-dialog-down'}>
+                            <div className={'d-flex align-center space-between left-panel-header pd-10'} style={{ padding: '10px 20px' }} >
+                                <p>Information</p>
+                                <button
+                                    className='btn btn-icon-only'
+                                    onClick={handleCloseLeftStip}
+                                >
+                                    <span className='ri-close-line color-icon-secondary'></span>
+                                </button>
+                            </div>
+                            <div className='pd-10' style={{ padding: '10px 20px' }}>
+                                <p className='font-16 font-weight-600 color-primary mb-10'>What is Virtual Machine?</p>
+                                <p className='font-12 color-icon-secondary' style={{ color: '#404040' }}>
+                                    In Buildpiper, for a monolithic application, we need to onboard the infrastructure required for deployment for the monolithic applications. This infrastructure is nothing but of VMs (virtual machines). Thus a virtual machine (VM) is a software-based unit of a LDC - Local data centre which runs an operating system and applications just like a physical computer but relies on virtualization technology to operate.
+                                </p>
+                            </div>
+                            <div className='checkbox-only-divi' style={{ padding: '10px 20px' }}>
+                                <Input
+                                    type="simple-checkbox"
+                                    name="dont_show_again"
+                                    label="Dont show this again"
+                                    // mandatorySign
+                                    data={data.data}
+                                    error={data.error}
+                                    onChangeHandler={onChangeDoNotshow}
+                                />
+                            </div>
+                        </div>
+                    }
+                    <div className='right-panel-dialog bg-white'>
+                        {
+                            state.task_id ?
+
+                                <Box sx={{
+                                    border: 'none',
+                                    '& > div > div': {
+                                        border: 'none !important',
+                                        boxShadow: 'none !important'
+                                    },
+                                    
+                                    '& [class^="makeStyles-cardFooter-"]': {
+                                        border: 'none !important',
+                                        backgroundColor: 'transparent !important',
+                                        padding: '16px 20px !important',
+                                        display: 'flex !important',
+                                        justifyContent: 'space-between !important',
+                                        alignItems: 'center !important',
+                                        position: 'relative !important',
+
+                                        '& .footer-left': {
+                                            display: 'flex !important',
+                                            alignItems: 'center !important',
+                                            gap: '12px !important'
+                                        },
+
+                                        '& .footer-right': {
+                                            display: 'flex !important',
+                                            gap: '12px !important',
+                                            alignItems: 'center !important',
+                                            justifyContent: 'flex-end !important',
+                                        },
+                                    },
+                                }}
+                                >
+                                    <div className='font-18 font-weight-600 color-white d-flex align-center space-between' style={{ backgroundColor: '#fff', padding: '13.5px 20px' }}>
+                                        <button
+                                            className='btn float-cancel-button'
+                                            style={showInfoSection ? { left: '396px' } : state.showLeftPanel ? {} : { left: '396px' }}
+                                            onClick={handleClose}
+                                        >
+                                            <span className='ri-close-line'></span>
+                                        </button>
+                                    </div>
+                                    <StepProgressDetailed
+                                        task_id={state.task_id}
+                                        variant="SAME_PAGE_REDIRECT"
+                                        type="new"
+                                        placeholders={{}}
+                                        refresh={closeDialogAndGetAttachedVMS}
+                                        handleClickToSkip={closeDialogAndGetAttachedVMS}
+                                        handleContinueToNextTab={closeDialogAndGetAttachedVMS}
+                                        handleRefresh={closeDialogAndGetAttachedVMS}
+                                    />
+                                </Box>
+                                :
+                                <>
+                                    <div className='font-18 font-weight-600 color-white d-flex align-center space-between' style={{ backgroundColor: '#0086ff', padding: '13.5px 20px' }}>
+                                        <p>{edit_id ? "Edit" : "Add"} Virtual Machine</p>
+                                        <button
+                                            className='btn float-cancel-button'
+                                            style={showInfoSection ? { left: '396px' } : state.showLeftPanel ? {} : { left: '396px' }}
+                                            onClick={handleClose}
+                                        >
+                                            <span className='ri-close-line'></span>
+                                        </button>
+                                    </div>
+                                    {showLoading || saveLoading ? <Loading varient="light" /> :
+                                        <>
+                                            <div className='' style={{ padding: '10px 20px', height: 'calc( 100vh - 150px )', overflowY: 'auto' }}>
+                                                <Grid container spacing={2}>
+                                                    {/* <Grid item lg={6}>
+                                                        {
+                                                         state.error_msg ? <AlertStrip message={state.error_msg} /> : null
+                                                        }
+                                                    </Grid>  */}
+                                                    <Grid item lg={12}>
+                                                        <p style={{ padding: "20px 0px 8px 0px" }} className="font-14 font-weight-600 color-header-new">Please fill the following Details</p>
+                                                    </Grid>
+
+
+                                                    <Grid item lg={6} className='input-mb-0'>
+                                                        <Input
+                                                            type="text"
+                                                            label="User Name"
+                                                            name="user_name"
+                                                            mandatorySign
+                                                            placeholder="Enter"
+                                                            maxLength={30}
+                                                            info={"The VM username for SSH (Secure Shell) is the specific username used to authenticate and log in to a virtual machine (VM) remotely via SSH protocol. The SSH username typically corresponds to a user account configured within the VM's operating system."}
+                                                            data={state.data}
+                                                            error={state.error}
+                                                            onChangeHandler={commonFunctions.onChangeHandler}
+                                                        />
+                                                    </Grid>
+                                                    <Grid item lg={6} className='input-mb-0'>
+                                                        <Input
+                                                            type="text"
+                                                            label="Ip Address"
+                                                            name="ip_address"
+                                                            placeholder="Enter"
+                                                            maxLength={30}
+                                                            info={"The VM IP address for SSH refers to the specific IP address assigned to a virtual machine (VM) that allows remote access via the Secure Shell (SSH) protocol."}
+                                                            mandatorySign
+                                                            data={state.data}
+                                                            error={state.error}
+                                                            onChangeHandler={commonFunctions.onChangeHandler}
+                                                        />
+                                                    </Grid>
+                                                    <Grid item lg={12} className='input-mb-0'>
+                                                        <Input
+                                                            type="text"
+                                                            label="VM Name"
+                                                            name="vm_name"
+                                                            placeholder="Enter"
+                                                            maxLength={30}
+                                                            info={"In Buildpiper, for a monolithic application, we need to onboard the infrastructure required for deployment for the monolithic applications. This infrastructure is nothing but of VMs (virtual machines). Thus a virtual machine (VM) is a software-based unit of a LDC - Local data centre which runs an operating system and applications just like a physical computer but relies on virtualization technology to operate."}
+                                                            mandatorySign
+                                                            data={state.data}
+                                                            error={state.error}
+                                                            onChangeHandler={commonFunctions.onChangeHandler}
+                                                        />
+                                                    </Grid>
+                                                    <Grid item lg={12} className='input-mb-0'>
+                                                        <Input
+                                                            type="text"
+                                                            label="Port"
+                                                            name="port"
+                                                            placeholder="Enter"
+                                                            maxLength={20}
+                                                            // info={"In Buildpiper, for a monolithic application, we need to onboard the infrastructure required for deployment for the monolithic applications. This infrastructure is nothing but of VMs (virtual machines). Thus a virtual machine (VM) is a software-based unit of a LDC - Local data centre which runs an operating system and applications just like a physical computer but relies on virtualization technology to operate."}
+                                                            info={
+                                                                "Port defines the entry point for network communication with the virtual machine. It tells the system which service or process should receive the connection."
+                                                            }
+                                                            mandatorySign
+                                                            data={state.data}
+                                                            error={state.error}
+                                                            onChangeHandler={commonFunctions.onChangeHandler}
+                                                        />
+                                                    </Grid>
+                                                    <Grid item lg={12} className='input-mb-0'>
+                                                        <Input
+                                                            type="tagged-input"
+                                                            name="add_primary_tag"
+                                                            label="Primary Tags"
+                                                            placeholder="Enter"
+                                                            maxLength={8}
+                                                            info={"Primary and Secondary tags are labels applied to VM groups. When deploying monolithic applications on VM groups, users can prioritize deployment to specific VMs by specifying these tags."}
+                                                            data={state.data}
+                                                            error={state.error}
+                                                            onChangeHandler={onChangeHandlerForKeyValue}
+
+                                                        />
+                                                    </Grid>
+                                                    <Grid item lg={12} className='input-mb-0'>
+                                                        <Input
+                                                            type="tagged-input"
+                                                            name="add_secondary_tag"
+                                                            label="Secondary Tags"
+                                                            placeholder="Enter"
+                                                            maxLength={8}
+                                                            info={"During deployment, the process first searches for VM groups with the primary label. If the resources meet the requirements, the deployment is scheduled on the VMs tagged as primary. Otherwise, it proceeds to VMs tagged as secondary."}
+                                                            data={state.data}
+                                                            error={state.error}
+                                                            onChangeHandler={onChangeHandlerForKeyValue}
+
+
+                                                        />
+                                                    </Grid>
+                                                    <Grid item lg={12} className='input-mb-0'>
+                                                        <Input
+                                                            type="select"
+                                                            name="collection_method"
+                                                            info={<>
+                                                                - SSH-based authentication refers to the method of authenticating and establishing a secure connection between a client and a server using the Secure Shell (SSH) protocol.
+                                                                <br />
+                                                                - Password-based authentication to a virtual machine (VM) refers to the method of authenticating access to the VM using a username and password combination.
+                                                            </>}
+                                                            mandatorySign
+                                                            label="Connection Method"
+                                                            list={connectionMethodList}
+                                                            data={state.data}
+                                                            error={state.error}
+                                                            onChangeHandler={commonFunctions.onChangeHandler}
+                                                        />
+                                                    </Grid>
+
+                                                    {
+                                                        state.data.collection_method == "USERNAME_PASSWORD" &&
+                                                        <>
+                                                            <Grid item xs={12} >
+                                                                <Input
+                                                                    type="select"
+                                                                    name="credential"
+                                                                    list={credentialsList}
+                                                                    label="Select Secrets"
+                                                                    placeholder="test-username"
+                                                                    mandatorySign
+                                                                    onChangeHandler={commonFunctions.onChangeHandler}
+                                                                    data={state.data}
+                                                                    error={state.error}
+                                                                    extraDiv={
+                                                                        <Link className='text-anchor-blue d-flex align-center' to="/secrets/add"><i className="ri-add-line"></i> New Secret</Link>
+                                                                    }
+                                                                />
+                                                            </Grid>
+                                                        </>
+
+                                                    }
+                                                    {
+                                                        state.data.collection_method === "SSH_KEY" &&
+                                                        <Grid item lg={12} className='input-mb-0'>
+                                                            <div className='d-flex align-center space-between' style={{ border: '1px solid #e0e0e0', padding: '12px', borderRadius: '4px' }}>
+                                                                <div className="d-flex align-center">
+                                                                    <span className="ri-key-2-line mr-10 font-18 color-grey"></span>
+                                                                    <span className="font-14 color-black">Authentication Key</span>
+                                                                </div>
+                                                                <button
+                                                                    className='btn btn-transparent-primary font-weight-600'
+                                                                    onClick={() => setOpenKeyDialog(true)}
+                                                                >
+                                                                    View Public Key
+                                                                </button>
+                                                            </div>
+                                                        </Grid>
+                                                    }
+
+
+                                                </Grid>
+
+                                            </div>
+
+
+
+                                            <Grid item lg={12} >
+                                                <div className="footer-right-panel">
+                                                    <button
+                                                        className="btn btn-primary"
+                                                        onClick={testAndSaveData}
+
+                                                    >
+                                                        {edit_id ? "UPDATE" : "TEST & SAVE"}{" "}
+                                                    </button>
+                                                </div>
+                                            </Grid>
+
+                                        </>}
+                                </>
+                        }
+
+                    </div>
+                </div>
+            </Dialog>
+            {openKeyDialog && (
+                <PublicKeyResultDialog
+                    open={openKeyDialog}
+                    onClose={() => setOpenKeyDialog(false)}
+                    SSHKey={sshKey}
+                />
+            )}
+            <Snackbar
+                anchorOrigin={{
+                    vertical: 'top',
+                    horizontal: 'right',
+                }}
+                open={state.show_save_msg === "success" || state.show_save_msg === "failed"}
+                onClose={handleCloseAlert}
+                autoHideDuration={3000}>
+                {
+                    state.error_msg ? <AlertStrip message={state.error_msg} /> : null
+                }
+                {
+
+                    state.show_save_msg === "success" ?
+                        <>
+                            <Alert severity="success" variant="filled">
+                                {state.success_msg}
+                            </Alert>
+                        </> : state.show_save_msg === "failed" ?
+                            <Alert severity="error" variant="filled">
+                                {state.error_in_save}
+                            </Alert>
+
+                            : null
+                }
+            </Snackbar>
+        </>
+    )
+}
+
+export default AddSingleVMDialog
+
+
+const useStyles = makeStyles((theme) => ({
+    root: {
+        '&.dialog-align-corner': {
+            '& .MuiPaper-root': {
+                maxWidth: '1100px'
+            }
+
+        },
+        '& .chip-wrapper-primary': {
+            backgroundColor: '#0086ff',
+            fontSize: '14px',
+            fontWeight: '500',
+            color: '#fff'
+        },
+        '& .input-with-icon': {
+            position: 'relative',
+            '& .cent-icon': {
+                width: '40px',
+                height: '44px',
+                backgroundColor: '#fafafa',
+                position: 'absolute',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '14px',
+                fontWeight: 500,
+                top: '22px',
+                right: '1px',
+                borderRadius: '0px 4px 4px 0px',
+                borderLeft: '1px solid #b7b7b7'
+            }
+        },
+        '& .left-panel-dialog': {
+            width: '396px',
+            transition: 'width 5s',
+
+            '& .left-panel-header': {
+                borderBottom: '1px solid #f1f1f1'
+            },
+            '& .checkbox-only-divi': {
+                position: 'absolute',
+                bottom: '10px'
+            },
+        },
+        '& .left-panel-dialog-down': {
+            width: '0px',
+            overflow: 'hidden',
+            transition: `'width 5s', 'overflow 1s'`,
+
+        },
+        '& .footer-right-panel': {
+            backgroundColor: '#ffffff',
+            position: 'absolute',
+            bottom: '0px',
+            width: '650px',
+            padding: '16px 25px',
+            display: 'flex',
+            justifyContent: 'flex-end',
+            alignItems: 'center',
+
+            // width:'100%',
+            '& button': {
+                marginBottom: '10px',
+
+                // marginLeft: 'auto'
+            }
+        }
+    }
+}));
