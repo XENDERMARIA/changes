@@ -1,38 +1,528 @@
-  <Box sx={{
-          border: 'none',
-          '& > div > div': {
-            border: 'none !important',
-            boxShadow: 'none !important'
-          },
+import React, { useEffect, useState } from 'react'
+import { makeStyles } from '@mui/styles';
+import Dialog from '@mui/material/Dialog';
+import { getCommonFunctions } from '../../../serviceRevamp/add/ci_flow/SourceDetails';
+import { Alert, Box } from '@mui/material';
+import Snackbar from '@mui/material/Snackbar';
+import { Loading } from '../../../utils/Loading';
+import StepProgressDetailed from '../../../../components/genericComponents/StepProgressDetailed';
+import AlertStrip from '../../../../components/AlertStrips';
 
-          '& [class^="makeStyles-cardFooter-"]': {
-            border: 'none !important',
-            backgroundColor: 'transparent !important',
-            padding: '16px 20px !important',
-            display: 'flex !important',
-            justifyContent: 'space-between !important',
-            alignItems: 'center !important',
-            position: 'relative !important',
+export const addSingleVMDefaultState = () => {
+  return {
+    data: {
+      add_primary_tag: [],
+      add_secondary_tag: []
+    },
+    error: {},
+    showLeftPanel: false,
+    loading_data: false,
+    available_monitoring_resource_list: [],
+    credential_list: [],
+    validations: {
+    }
+  }
+}
 
-            '& .footer-left': {
-              display: 'flex !important',
-              alignItems: 'center !important',
-              gap: '12px !important'
-            },
 
-            '& .footer-right': {
-              display: 'flex !important',
-              gap: '12px !important',
-              alignItems: 'center !important'
-            },
-          },
-        }}
+const ShowActivityStatusFramework = (props) => {
+  const classes = useStyles();
+  const open = props.open;
+  const task_id = props.task_id;
+  const clear_form_flag = props.clear_form_flag ? props.clear_form_flag : false;
+  const edit_id = props.edit_id ? props.edit_id : null;
+  const handleClose = props.handleClose ? props.handleClose : () => { };
+  const vmGroupDetails = props.vmGroupDetails ? props.vmGroupDetails : () => { };
+  const handleCloseDialogAndFetchVMs = props.handleCloseDialogAndFetchVMs ? props.handleCloseDialogAndFetchVMs : () => { };
+  const prev_state = props.prev_state ? props.prev_state : null
+  const [state, setState] = useState(prev_state ? prev_state : addSingleVMDefaultState())
+  const [showInput, setShowInput] = useState(false);
+  const [data, setData] = useState({ data: {}, error: {} })
+  const commonFunctions = getCommonFunctions(state, setState, {})
+  const showInfoSection = JSON.parse(localStorage.getItem('monitoring_source_dialog_display_flag'));
+  const [showLoading, setShowLoading] = useState(false);
+
+  useEffect(() => {
+    setShowLoading(true);
+    setState((new_state) => ({
+      ...new_state,
+      ...prev_state
+    }));
+    setTimeout(() => {
+      setShowLoading(false)
+    }, 200);
+  }, [prev_state])
+
+
+
+  useEffect(() => {
+    console.log(clear_form_flag, "clear_form_flagclear_form_flag")
+
+    setState(new_state => ({
+      ...new_state,
+      data: {
+      },
+      error: {},
+      showLeftPanel: false,
+      loading_data: false,
+      available_monitoring_resource_list: [],
+      credential_list: [],
+      validations: {
+
+      }
+    }));
+
+  }, [clear_form_flag])
+
+  const handleCloseLeftStip = () => {
+    if (data?.data?.dont_show_again) {
+      setDataToLocalStorage()
+    }
+    setState(new_state => ({
+      ...new_state,
+      showLeftPanel: false
+    }));
+  }
+  function setDataToLocalStorage() {
+    localStorage.setItem('monitoring_source_dialog_display_flag', data.data.dont_show_again);
+  }
+
+
+  const handleCloseAlert = () => {
+    setState({ ...state, show_save_msg: null, });
+  };
+
+
+  const closeDialogAndGetAttachedVMS = () => {
+
+    handleCloseDialogAndFetchVMs();
+    handleClose();
+    setState((new_state) => ({
+      ...new_state,
+      task_id: null,
+      data: {},
+      error: {},
+      showLeftPanel: false,
+      loading_data: false,
+      available_monitoring_resource_list: [],
+      credential_list: [],
+      validations: {
+      }
+    }));
+  }
+
+  return (
+    <>
+      <Dialog
+        fullWidth={true}
+        maxWidth={"md"}
+        open={open}
+        onClose={handleClose}
+        className={`${classes.root} dialog-align-corner`}
+        aria-labelledby="max-width-dialog-title"
+      >
+        <div
+          className="d-grid ml-auto dialog-sub-component"
+          style={
+            showInfoSection
+              ? { gridTemplateColumns: "650px" }
+              : { gridTemplateColumns: "396px 650px" }
+          }
         >
-          {taskId && (
-            <ShowActivityStatusFramework
-              open={taskId ? true : false}
-              task_id={taskId}
-              handleClose={handleCloseStatusActivity}
-            />
+          {!showInfoSection && (
+            <div
+              className={
+                state.showLeftPanel
+                  ? "left-panel-dialog bg-white position-relative"
+                  : "left-panel-dialog-down"
+              }
+            >
+              <div
+                className={
+                  "d-flex align-center space-between left-panel-header pd-10"
+                }
+                style={{ padding: "10px 20px" }}
+              >
+                <p>Information</p>
+                <button
+                  className="btn btn-icon-only"
+                  onClick={handleCloseLeftStip}
+                >
+                  <span className="ri-close-line color-icon-secondary"></span>
+                </button>
+              </div>
+            </div>
           )}
-        </Box>
+          <div className="right-panel-dialog bg-white">
+            <div
+              className="font-18 font-weight-600 color-white d-flex align-center space-between"
+              style={{ backgroundColor: "#0086ff", padding: "13.5px 20px" }}
+            >
+              <p>Connecting Virtual Machine</p>
+              <button
+                className="btn float-cancel-button"
+                style={
+                    !showInfoSection
+                      ? {
+                          position: "absolute",
+                          top: "0px",
+                          left: "-55px",
+                          zIndex: "1000",
+                        }
+                      : state.showLeftPanel
+                        ? {}
+                        : {
+                            position: "absolute",
+                            top: "0px",
+                            left: "-450px",
+                            zIndex: "1000",
+                          }
+                  }
+                onClick={handleClose}
+              >
+                <span className="ri-close-line"></span>
+              </button>
+            </div>
+            {task_id ? (
+              <Box
+                sx={{
+                  border: "none",
+                  "& > div > div": {
+                    border: "none !important",
+                    boxShadow: "none !important",
+                  },
+                  '& [class^="makeStyles-cardFooter-"]': {
+                    border: "none !important",
+                    backgroundColor: "transparent !important",
+                    padding: "16px 20px !important",
+                    display: "flex !important",
+                    justifyContent: 'space-between !important',
+                    alignItems: 'center !important',
+                    position: 'relative !important',
+                    "& .footer-layout": {
+                      display: "flex !important",
+                      justifyContent: "space-between !important",
+                      alignItems: "center !important",
+                      width: "100% !important",
+                    },
+                    "& .footer-left": {
+                      display: "flex !important",
+                      alignItems: "center !important",
+                      gap: '12px !important'
+                    },
+                    "& .footer-right": {
+                      display: "flex !important",
+                      gap: "12px !important",
+                      alignItems: "center !important",
+                    },
+                    "& .btn-outline-secondary": {
+                      display: "flex !important",
+                      height: "40px !important",
+                      padding: "8px 24px !important",
+                      justifyContent: "center !important",
+                      alignItems: "center !important",
+                      gap: "6px !important",
+                      borderRadius: "6px !important",
+                      border: "1px solid #D0D0D0 !important",
+                      background: "#FFF !important",
+                      color: "#666 !important",
+                      fontSize: "12px !important",
+                      fontWeight: "600 !important",
+                      cursor: "pointer !important",
+                      "&:hover": {
+                        background: "#F5F5F5 !important",
+                        borderColor: "#999 !important",
+                      },
+                      "&:disabled": {
+                        opacity: "0.5 !important",
+                        cursor: "not-allowed !important",
+                      },
+                    },
+                    "& .view-log-btn": {
+                      display: "flex !important",
+                      height: "40px !important",
+                      padding: "8px 24px !important",
+                      justifyContent: "center !important",
+                      alignItems: "center !important",
+                      gap: "6px !important",
+                      borderRadius: "6px !important",
+                      border: "1px solid #9DC0EE !important",
+                      background: "#FFF !important",
+                      color: "#0086FF !important",
+                      fontSize: "12px !important",
+                      fontWeight: "600 !important",
+                      textDecoration: "none !important",
+                      "&:hover": {
+                        background: "#0086FF !important",
+                        color: "#FFF !important",
+                      },
+                    },
+                    "& .re-configure-btn": {
+                      display: "flex !important",
+                      height: "40px !important",
+                      padding: "11px 16px !important",
+                      justifyContent: "center !important",
+                      alignItems: "center !important",
+                      gap: "6px !important",
+                      borderRadius: "6px !important",
+                      background: "#FFA500 !important",
+                      color: "#FFFFFF !important",
+                      fontSize: "12px !important",
+                      fontWeight: "600 !important",
+                      border: "none !important",
+                      cursor: "pointer !important",
+                      "&:hover": {
+                        background: "#FF8C00 !important",
+                      },
+                    },
+                    "& .retry-btn": {
+                      display: "flex !important",
+                      height: "40px !important",
+                      padding: "8px 24px !important",
+                      justifyContent: "center !important",
+                      alignItems: "center !important",
+                      gap: "6px !important",
+                      borderRadius: "6px !important",
+                      background: "#0086FF !important",
+                      color: "#FFFFFF !important",
+                      fontSize: "12px !important",
+                      fontWeight: "600 !important",
+                      border: "none !important",
+                      cursor: "pointer !important",
+                      "&:hover": {
+                        background: "#005BBB !important",
+                      },
+                    },
+                    "& .view-permisson-btn": {
+                      border: "none !important",
+                      display: "flex !important",
+                      height: "40px !important",
+                      padding: "8px 24px !important",
+                      justifyContent: "center !important",
+                      alignItems: "center !important",
+                      gap: "6px !important",
+                      borderRadius: "6px !important",
+                      background: "#0086FF !important",
+                      color: "#FFF !important",
+                      cursor: "pointer !important",
+                      "&:hover": {
+                        background: "#03234D !important",
+                        color: "#FFF !important",
+                      },
+                    },
+                  },
+                }}
+                className="step-progress-detailes-wrapper"
+              >
+                {/* <div
+                  className="font-18 font-weight-600 color-white d-flex align-center space-between"
+                  style={{ backgroundColor: "#fff", padding: "13.5px 20px" }}
+                >
+                  <button
+                    className="btn float-cancel-button"
+                    style={
+                      showInfoSection
+                        ? { left: "396px" }
+                        : state.showLeftPanel
+                          ? {}
+                          : { left: "396px" }
+                    }
+                    onClick={handleClose}
+                  >
+                    <span className="ri-close-line"></span>
+                  </button>
+                </div> */}
+                {/* <StepProgressDetailed
+                    task_id={task_id}
+                    type="new"
+                    variant="SAME_PAGE_REDIRECT"
+                    placeholders={{}}
+                    handleCloseDialogAndRefresh={() => {
+                      console.log("api hitt one");
+                    }}
+                    refresh={closeDialogAndGetAttachedVMS}
+                    triggerBuildDeploy={closeDialogAndGetAttachedVMS}
+                  /> */}
+                <Box sx={{
+                  border: 'none',
+                  '& > div > div': {
+                    border: 'none !important',
+                    boxShadow: 'none !important'
+                  },
+
+                  '& [class^="makeStyles-cardFooter-"]': {
+                    border: 'none !important',
+                    backgroundColor: 'transparent !important',
+                    padding: '16px 20px !important',
+                    display: 'flex !important',
+                    justifyContent: 'space-between !important',
+                    alignItems: 'center !important',
+                    position: 'relative !important',
+
+                    '& .footer-left': {
+                      display: 'flex !important',
+                      alignItems: 'center !important',
+                      gap: '12px !important'
+                    },
+
+                    '& .footer-right': {
+                      display: 'flex !important',
+                      gap: '12px !important',
+                      alignItems: 'center !important'
+                    },
+                  },
+                }}
+                >
+                  {/* <div className='font-18 font-weight-600 color-white d-flex align-center space-between' style={{ backgroundColor: '#fff', padding: '13.5px 20px' }}>
+                    <button
+                      className='btn float-cancel-button'
+                      style={showInfoSection ? { left: '396px' } : state.showLeftPanel ? {} : { left: '396px' }}
+                      onClick={handleClose}
+                    >
+                      <span className='ri-close-line'></span>
+                    </button>
+                  </div> */}
+                  <StepProgressDetailed
+                    task_id={task_id}
+                    variant="SAME_PAGE_REDIRECT"
+                    type="new"
+                    placeholders={{}}
+                    refresh={closeDialogAndGetAttachedVMS}
+                    handleClickToSkip={closeDialogAndGetAttachedVMS}
+                    handleContinueToNextTab={closeDialogAndGetAttachedVMS}
+                    handleRefresh={closeDialogAndGetAttachedVMS}
+                    triggerBuildDeploy={closeDialogAndGetAttachedVMS}
+                  />
+                </Box>
+
+
+              </Box>
+            ) : (
+              <>
+                <div
+                  className="font-18 font-weight-600 color-white d-flex align-center space-between"
+                  style={{
+                    backgroundColor: "#0086ff",
+                    padding: "13.5px 20px",
+                  }}
+                >
+                  <p>Testing Connection of Virtual Machine</p>
+                  <button
+                    className="btn float-cancel-button"
+                    style={
+                      showInfoSection
+                        ? { left: "396px" }
+                        : state.showLeftPanel
+                          ? {}
+                          : { left: "396px" }
+                    }
+                    onClick={handleClose}
+                  >
+                    <span className="ri-close-line"></span>
+                  </button>
+                </div>
+                {state.error_msg ? (
+                  <AlertStrip message={state.error_msg} />
+                ) : null}
+                {showLoading ? <Loading varient="light" /> : <></>}
+              </>
+            )}
+          </div>
+        </div>
+      </Dialog>
+      <Snackbar
+        anchorOrigin={{
+          vertical: "top",
+          horizontal: "right",
+        }}
+        open={
+          state.show_save_msg === "success" ||
+          state.show_save_msg === "failed"
+        }
+        onClose={handleCloseAlert}
+        autoHideDuration={3000}
+      >
+        {state.show_save_msg === "success" ? (
+          <>
+            <Alert severity="success" variant="filled">
+              {state.success_msg}
+            </Alert>
+          </>
+        ) : state.show_save_msg === "failed" ? (
+          <Alert severity="error" variant="filled">
+            {state.error_in_save}
+          </Alert>
+        ) : null}
+      </Snackbar>
+    </>
+  );
+}
+
+export default ShowActivityStatusFramework
+
+
+const useStyles = makeStyles((theme) => ({
+  root: {
+    '&.dialog-align-corner': {
+      '& .MuiPaper-root': {
+        maxWidth: '1100px'
+      }
+
+    },
+    '& .input-with-icon': {
+      position: 'relative',
+      '& .cent-icon': {
+        width: '40px',
+        height: '44px',
+        backgroundColor: '#fafafa',
+        position: 'absolute',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontSize: '14px',
+        fontWeight: 500,
+        top: '22px',
+        right: '1px',
+        borderRadius: '0px 4px 4px 0px',
+        borderLeft: '1px solid #b7b7b7'
+      }
+    },
+    '& .left-panel-dialog': {
+      width: '396px',
+      transition: 'width 5s',
+
+      '& .left-panel-header': {
+        borderBottom: '1px solid #f1f1f1'
+      },
+      '& .checkbox-only-divi': {
+        position: 'absolute',
+        bottom: '10px'
+      },
+    },
+    '& .left-panel-dialog-down': {
+      width: '0px',
+      overflow: 'hidden',
+      transition: `'width 5s', 'overflow 1s'`,
+
+    },
+    '& .right-panel-dialog': {
+            position: 'relative',
+            width: '650px',
+            height: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+        },
+    '& .footer-right-panel': {
+      backgroundColor: '#fafafa',
+      padding: '20px',
+      position: 'absolute',
+      bottom: '0px',
+      width: '650px',
+
+      // width:'100%',
+      '& button': {
+        // marginLeft: 'auto'
+      }
+    }
+  }
+}));
