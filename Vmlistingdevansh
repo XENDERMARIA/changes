@@ -1,1407 +1,690 @@
-import React, { useState } from 'react';
-import PropTypes from 'prop-types';
+import React, { useEffect, useState } from 'react'
 import { makeStyles } from '@mui/styles';
-import LinearProgress from '@mui/material/LinearProgress';
-import { Link } from 'react-router-dom';
-import properties from '../../properties/properties';
-import GenerateURL, { GenerateSearchURL } from '../../util/APIUrlProvider';
-import InvokeApi from '../../util/apiInvoker';
-import { ErrorComponent } from '../../views/utils/Error';
-import Tooltip from '@mui/material/Tooltip';
-import Zoom from '@mui/material/Zoom';
-// import ViewLogsInfiniteScroll1, { getNewLogTab } from '../../views/service/listing/components/ViewLogsInfiniteScroll1';
-import RunningDotsComponent from '../../views/service/listing/components/componentLogsViewer/RunningDotsComponent';
-import { useCustomSnackbar } from '../../contexts/SnackbarContext';
-import { showErrorHandlerUpdated } from '../../util/util';
-import { UpdateClusterDataForNavigation } from '../../util/GlobalVars';
-const StepProgressDetailed = props => {
+import Dialog from '@mui/material/Dialog';
+import { VALIDATION_TYPE_REQUIRED, ValidateDataSet } from '../../../../util/Validator';
+import { getCommonFunctions } from '../../../serviceRevamp/add/ci_flow/SourceDetails';
+import Grid from '@mui/material/Grid';
+import Snackbar from '@mui/material/Snackbar';
+import { Input } from '../../../../components/genericComponents/Input';
+import { Loading } from '../../../utils/Loading';
+import properties from '../../../../properties/properties';
+import GenerateURL from '../../../../util/APIUrlProvider';
+import InvokeApi, { PostData } from '../../../../util/apiInvoker';
+import CopySSHkeyDialog from './CopySSHkeyDialog';
+import StepProgressDetailed from '../../../../components/genericComponents/StepProgressDetailed';
+import { showErrorHandlerUpdated } from '../../../../util/util';
+import AlertStrip from '../../../../components/AlertStrips';
+import PublicKeyResultDialog from './CopyPublicKeyDialouge';
+import SshKeys from '../../../integrations/secrets/components/SshKeys';
+import { Link, Navigate, useParams } from 'react-router-dom';
+import { Box } from '@mui/material';
 
-    const classes = useStyles();
-    const newTypeClases = newTypeStyles();
-    const configDbChanges = configDbChangesStyles();
-    const placeholders = props.placeholders;
-    const handleContinueToNextTab = props.handleContinueToNextTab;
-    const [progress] = React.useState(0);
-    const [state, setState] = useState({
-        activity_master: {},
-        sub_task_status: [],
-        status: "",
-        activity_obj: {
-
+export const addSingleVMDefaultState = () => {
+    return {
+        data: {
+            add_primary_tag: [],
+            add_secondary_tag: []
         },
-        history_status: "SUCCESS",
-        showLoadingIcon: false,
-        history_list: [],
-        error: false,
-        selected_tab: 1,
-        logs: "",
-        task_id: "",
-        infiniteScrollInherits: {},
-        endPoint: GenerateURL({ service_id: props.service_id, env_id: props.env_id }, properties.api.env_build_request_url)
-    });
-    let timer = null;
-    const triggerBuildDeploy = props.triggerBuildDeploy;
-    const task_id = props.task_id;
-    const type = props.type;
-    const hintText = props.hintText ? props.hintText : "Click on finish to complete the Setup";
-    const btnLabel = props.btnLabel ? props.btnLabel : null;
-    const skipButtonRequired = props.skipButtonRequired ? props.skipButtonRequired : false;
-    const handleClickToSkip = props.handleClickToSkip ? props.handleClickToSkip : () => { }
-    const [showProgressBar, setShowProgressBar] = useState(true);
-    const { showSnackbar } = useCustomSnackbar();
-    const closeClick = props.closeClick || null;
-    console.log("propsmdskm", props);
-    React.useEffect(() => {
-        if (task_id) {
-            fetchActivityStatus();
+        // task_id: "09df5fcf-e564-40bc-9ad2-f9464338d634",
+        error: {},
+        showLeftPanel: true,
+        loading_data: false,
+        available_monitoring_resource_list: [],
+        credential_list: [],
+        validations: {
         }
-        return () => clearTimeout(timer);
-    }, [task_id]);
+    }
+}
+const AddSingleVMDialog = ({ ...props }) => {
+    const classes = useStyles();
+    const { id: routeId } = useParams();
+    const open = props.open;
+    const clear_form_flag = props.clear_form_flag ? props.clear_form_flag : false;
+    const edit_id = props.edit_id ? props.edit_id : null;
+    const handleClose = props.handleClose ? props.handleClose : () => { };
+    const vmGroupDetails = props.vmGroupDetails ? props.vmGroupDetails : {};
+    const handleCloseDialogAndFetchVMs = props.handleCloseDialogAndFetchVMs ? props.handleCloseDialogAndFetchVMs : () => { };
+    const prev_state = props.prev_state ? props.prev_state : null
+    const [state, setState] = useState(prev_state ? prev_state : addSingleVMDefaultState())
+    const [openKeyDialog, setOpenKeyDialog] = useState(false);
+    // const [sshKey, setSshKey] = useState('');
+    const [sshKey, setSshKey] = useState("ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDL34r9RuLg8cd7F7wTVIRum1loo5pEnNhs9d9onaq7uun5X1Hi2J7jEehueyjUQoLa2sz9NZgN4vPDBQ2KNVtnmSwdIV3CEbhpIhS2vyNI/MvBlBXolFgvG3xP+85Lj0iHQST18fiLPUZSUtdIjpbLmz5arY/5IUlF8sUULKNZu4sDpOGuATUheigmMjylnc1kr7O25ILYHVbFdXoz8HGnFgnifWpKpUadvwiyGmp3NlZnRgY9XXp0n/RZMLUKgfyuKl/I8SnAvu6K6O2Uz5WKcFLoKrVNB9rcLXzBP32Kvia6QPm0IeROeEsyJNe3zRVdRVpoLIg2LhwlOUKkO2+J root@ot-app");
 
+    const [showInput, setShowInput] = useState(false);
+    const [data, setData] = useState({ data: {}, error: {} })
+    const commonFunctions = getCommonFunctions(state, setState, {})
+    const showInfoSection = JSON.parse(localStorage.getItem('monitoring_source_dialog_display_flag'));
+    const [showLoading, setShowLoading] = useState(false);
+    const [credentialsList, setCredentailList] = useState([])
+    const [credentialsLoading, setCredentailLoading] = useState(false);
+    const onClickOpenSSHkeyDialog = props.onClickOpenSSHkeyDialog ? props.onClickOpenSSHkeyDialog : () => { }
+    const [saveLoading, setSaveLoading] = useState(false);
+    useEffect(() => {
+        console.log(prev_state, 'data_0')
+        state.task_id == undefined && open && fetchCredentials();
 
-    React.useEffect(() => {
-        fetchActivitiesInfo();
-    }, [])
-
-    React.useEffect(() => {
-        getTriggeredService();
-    }, [state.activity_list])
-
-    function getTriggeredService() {
-        let selected_service;
-        state.activity_list?.forEach(element => {
-            if (element.activity_token == task_id) {
-                selected_service = element;
-            }
-        });
-
+        setShowLoading(true);
         setState((new_state) => ({
             ...new_state,
-            triggered_service: selected_service
-        }))
-
-        console.log(selected_service, "sjvcxdzgcvsdjcvgds")
-    }
-
-    function fetchActivitiesInfo(data, url) {
-
-        let requestInfo = {
-            endPoint: GenerateURL({}, properties.api.get_activities_details),
-            httpMethod: "GET",
-            httpHeaders: { "Content-Type": "application/json" }
-        }
-        if (data) {
-            requestInfo.endPoint = GenerateSearchURL(data, requestInfo.endPoint);
-        }
-        if (url) {
-            requestInfo.endPoint = url;
-        }
-        setState(new_state => ({
-            ...new_state,
-            search_data: data,
-            current: requestInfo.endPoint,
+            ...prev_state
         }));
-        InvokeApi(requestInfo, ActivityInfoFetchSuccess, ActivityInfoFetchFailure);
-    }
+        setTimeout(() => {
+            setShowLoading(false)
+        }, 200);
+    }, [prev_state, state.task_id, open])
 
-    function ActivityInfoFetchSuccess(response) {
-        console.log(response, "+++++>>>")
-        setState(new_state => ({
-            ...new_state,
-            activity_list: response.results,
-            activity_id: response.id,
-            count: response.count,
-            next: response.next,
-            previous: response.previous,
-        }));
-    }
-
-    function ActivityInfoFetchFailure(error, exception) {
-        setState(new_state => ({
-            ...new_state,
-            error: true
-        }));
-    }
-
-
-    console.log("aaaaaaa", task_id)
-    function fetchActivityStatus() {
-        let url_temp = GenerateURL({}, properties.api.project_status);
-        console.log("props", props)
-        let requestInfo = {
-            endPoint: GenerateSearchURL({ task_id: task_id }, url_temp),
-            httpMethod: "GET",
-            httpHeaders: { "Content-Type": "application/json" }
-        }
-
-        InvokeApi(requestInfo, onStatusFetchSuccess, onStatusFetchFail)
-    }
-
-    function onStatusFetchSuccess(response) {
-        console.log("response_status-djis", response);
-        const all_activities = properties.activities;
-        const activityName = response?.activity_master?.activity_name;
-        const activityCode = response.activity_master.code.toLowerCase();
-        const activityObj = all_activities[activityCode];
-        const description = 'View logs for more details';
-        if (response.status === "FAILED") {
-            showSnackbar('error', `Task failed for activity: ${activityName}`, "View logs for detailed failure");
-        } else if (response.status === "SUCCESS") {
-            showSnackbar('success', `Task completed for activity: ${activityName}`);
-        }
-
-
-        setState(new_state => ({
-            ...new_state,
-            response: response,
-            loaded: false,
-            activity_master: response.activity_master,
-            sub_task_status: response.sub_task_status,
-            status: response.status,
-            description: response.description,
-            activity_obj: activityObj
-        })
-        )
-        timer = setTimeout(() => {
-            if (response.status == "RUNNING" || response.status == "IN_QUEUE") {
-                fetchActivityStatus();
-            }
-            else {
-                setShowProgressBar(false);
-            }
-
-            // if(viewLogs){
-            //     fetchLogs();
-            // }
-        }, 2000)
-
-    }
-
-    console.log(state, "sbvnxdvxnvxnvnbf")
-
-    function onStatusFetchFail(response) {
-        let error_msg = showErrorHandlerUpdated(response)
-        showSnackbar('error', 'Task has failed.', error_msg)
-        setState(new_state => ({
-            ...new_state,
-            error: error_msg
-        })
-        )
-    }
-    const handleRefresh = () => {
-        // by calling this method react re-renders the component
-
-        props.refresh();
-        //window.location.reload(false);
-    };
-    const success_page = state.activity_obj?.success_page ? GenerateURL(placeholders ? placeholders : {}, state.activity_obj?.success_page, true) : "";
-    //const fail_page = state.activity_obj?.fail_page ? GenerateURL(placeholders ? placeholders : {}, state.activity_obj?.fail_page, true) : "";
-    console.log("success", success_page)
-    function changeTab(newTabId) {
-        setState(new_state => ({
-            ...new_state,
-            selected_tab_id: newTabId
-        }))
-    }
-    function closeLogs() {
-        setState(new_state => ({
-            ...new_state,
-            view_logs: false,
-            logMetadata: {}
-        }))
-    }
-
-    function closeTab(tabId) {
-        let response = state.infiniteScrollInherits.closeTabFunction(tabId, state.logMetadata, closeLogs)
-        if (response) {
+    console.log(state, 'data_state_0sdsdsdsd')
+    useEffect(() => {
+        console.log(clear_form_flag, 'data_1')
+        clear_form_flag &&
             setState(new_state => ({
                 ...new_state,
-                logMetadata: response.new_tabs_data,
-                selected_tab_id: response.selected_tab_id
-            }))
+                data: {
+                    add_primary_tag: [],
+                    add_secondary_tag: [],
+                    user_name: '',
+                    ip_address: '',
+                    vm_name: '',
+                    port: '',
+                    collection_method: '',
+                    credential: ''
+
+                },
+                error: {},
+                showLeftPanel: true,
+                loading_data: false,
+                available_monitoring_resource_list: [],
+                credential_list: [],
+                validations: {
+
+                }
+            }));
+
+    }, [clear_form_flag])
+
+    const handleCloseLeftStip = () => {
+        if (data?.data?.dont_show_again) {
+            setDataToLocalStorage()
+        }
+        setState(new_state => ({
+            ...new_state,
+            showLeftPanel: false
+        }));
+    }
+    function setDataToLocalStorage() {
+        localStorage.setItem('monitoring_source_dialog_display_flag', data.data.dont_show_again);
+    }
+    function onChangeDoNotshow(e) {
+        var key = e.target.name;
+        var value = e.target.value;
+        if (key == "dont_show_again") {
+            value = !data.data.dont_show_again;
+        }
+        setData((prevState) => ({
+            ...prevState,
+            data: {
+                ...prevState.data,
+                [key]: value,
+            },
+            error: {
+                ...prevState.error,
+                [key]: '', // Reset error on change
+            },
+        }));
+    }
+
+    const handleCloseAlert = () => {
+        setState({ ...state, show_save_msg: null, });
+    };
+
+    const testAndSaveData = () => {
+        let validations = {
+            user_name: [VALIDATION_TYPE_REQUIRED],
+            ip_address: [VALIDATION_TYPE_REQUIRED],
+            vm_name: [VALIDATION_TYPE_REQUIRED],
+            port: [VALIDATION_TYPE_REQUIRED],
+            // add_primary_tag: [VALIDATION_TYPE_REQUIRED],
+            // add_secondary_tag: [VALIDATION_TYPE_REQUIRED],
+            collection_method: [VALIDATION_TYPE_REQUIRED],
+        }
+        console.log("****************************", validations)
+        if (state.data.collection_method == "USERNAME_PASSWORD") {
+            validations['credential'] = [VALIDATION_TYPE_REQUIRED]
+        }
+        var result = ValidateDataSet(state.data, validations);
+        console.log("****************************", result);
+        if (result) {
+            var basic_details = {};
+            basic_details = {
+                ...state.data,
+                "vm_set": vmGroupDetails && vmGroupDetails.id
+            };
+            if (prev_state && prev_state.data && prev_state.data.id) {
+                var post_url = GenerateURL({ edit_id: prev_state.data.id }, properties.api.edit_single_vm);
+            } else {
+                var post_url = GenerateURL({}, properties.api.add_single_vm);
+            }
+            setSaveLoading(true);
+            PostData(post_url, basic_details, onSaveSuccess, onSaveFail);
+        } else {
+            setSaveLoading(false);
+            setState((new_state) => ({
+                ...new_state,
+                error: {
+                    ...new_state.error,
+                    ...result.error
+                }
+            }));
         }
     }
-    console.log("bndjdbns", state);
-    return (
-        type == "new" ?
-            <div className={classes.root}>
-                <div className={newTypeClases.root}>
-                    {
-                        state.error ?
-                            <ErrorComponent error={state.error} /> : null
+
+    const onSaveSuccess = (response) => {
+        setSaveLoading(false);
+        if (response && response.task) {
+            setState((new_state) => ({
+                ...new_state,
+                task_id: response.task
+            }));
+        } else {
+            closeDialogAndGetAttachedVMS();
+        }
+
+    }
+    const onSaveFail = (error) => {
+        setSaveLoading(false);
+        const error_msg = showErrorHandlerUpdated(error)
+        setState((new_state) => ({
+            ...new_state,
+            error: {
+                ...new_state.error,
+                ...error
+            },
+            error_msg: error_msg
+        }));
+
+    }
+
+    const closeDialogAndGetAttachedVMS = () => {
+
+        handleCloseDialogAndFetchVMs();
+        handleClose();
+        setState((new_state) => ({
+            ...new_state,
+            task_id: null,
+            data: {},
+            error: {},
+            showLeftPanel: true,
+            loading_data: false,
+            available_monitoring_resource_list: [],
+            credential_list: [],
+            validations: {
+            }
+        }));
+    }
+    function onChangeHandlerForKeyValue(key, value) {
+        setState({
+            ...state,
+            data: {
+                ...state.data,
+                [key]: value
+            },
+            error: {
+                ...state.error,
+                [key]: null,
+            }
+        });
+    }
+
+    function fetchCredentials() {
+
+        var requestInfo = {
+            endPoint: GenerateURL({}, properties.api.credential_all),
+            httpMethod: "GET",
+            httpHeaders: { "Content-Type": "application/json" }
+        }
+
+        requestInfo.endPoint = requestInfo.endPoint + "?all=true";
+        setCredentailLoading(true);
+        InvokeApi(requestInfo, CredentialsFetchSuccess, CredentialsFetchFailure);
+
+    }
+
+    function CredentialsFetchSuccess(data) {
+
+        if (data && data.results) {
+            var credentials = data.results.length > 0 ? data.results.map(
+
+                item => {
+                    console.log(item, "fdsanfjknsajk")
+                    return {
+                        id: item.id,
+                        label: item.name
                     }
-                    <div className={newTypeClases.cardBody}>
-                        <div className="d-flex justify-end width-full ">
-                            {
-                                props.variant == "SAME_PAGE_REDIRECT" ?
-                                    <div className='mr-20 d-flex align-center width-full space-between ml-20' >
-                                        {state.status == "FAILED" ?
-                                        <button
-                                            className="btn btn-transparent "
-                                            onClick={handleClickToSkip}
-                                        >
-                                            <span className='ri-arrow-left-line mr-5'></span> Back 
-                                        </button>
-        : <div></div>}
-                                        <button
-                                            className="btn btn-transparent "
-                                            onClick={handleClickToSkip}
-                                        >
-                                            SKIP <span className='ri-arrow-right-line ml-5'></span>
-                                        </button>
-                                    </div>
-                                    :
-                                    <Link to={success_page}><button className="btn btn-transparent">
-                                        <span className='ri-close-fill font-20 color-value'></span>
-                                    </button></Link>
-                            }
+                }
+            ) : []
+            setCredentailList(credentials)
+            setCredentailLoading(false)
 
+        } else {
+            setCredentailLoading(false);
+        }
+
+    }
+
+    function CredentialsFetchFailure(error, exception) {
+
+        setCredentailList([])
+        setCredentailLoading(false)
+    };
+
+    console.log(saveLoading, 'creds_data_09jsd')
+    const connectionMethodList = [
+        { "label": "SSH Key", id: "SSH_KEY" },
+        { "label": "Username Password", id: "USERNAME_PASSWORD" }
+    ]
+    return (
+        <>
+
+            <Dialog
+                fullWidth={true}
+                maxWidth={'md'}
+                open={open}
+                onClose={handleClose}
+                className={`${classes.root} dialog-align-corner`}
+                aria-labelledby="max-width-dialog-title"
+            >
+                <div className='d-grid ml-auto dialog-sub-component' style={{ gridTemplateColumns: '396px 650px' }}>
+                    {
+                        !showInfoSection &&
+
+                        <div className={state.showLeftPanel ? 'left-panel-dialog bg-white position-relative' : 'left-panel-dialog-down'}>
+                            <div className={'d-flex align-center space-between left-panel-header pd-10'} style={{ padding: '10px 20px' }} >
+                                <p>Information</p>
+                                <button
+                                    className='btn btn-icon-only'
+                                    onClick={handleCloseLeftStip}
+                                >
+                                    <span className='ri-close-line color-icon-secondary'></span>
+                                </button>
+                            </div>
+                            <div className='pd-10' style={{ padding: '10px 20px' }}>
+                                <p className='font-16 font-weight-600 color-primary mb-10'>What is Virtual Machine?</p>
+                                <p className='font-12 color-icon-secondary' style={{ color: '#404040' }}>
+                                    In Buildpiper, for a monolithic application, we need to onboard the infrastructure required for deployment for the monolithic applications. This infrastructure is nothing but of VMs (virtual machines). Thus a virtual machine (VM) is a software-based unit of a LDC - Local data centre which runs an operating system and applications just like a physical computer but relies on virtualization technology to operate.
+                                </p>
+                            </div>
+                            <div className='checkbox-only-divi' style={{ padding: '10px 20px' }}>
+                                <Input
+                                    type="simple-checkbox"
+                                    name="dont_show_again"
+                                    label="Dont show this again"
+                                    // mandatorySign
+                                    data={data.data}
+                                    error={data.error}
+                                    onChangeHandler={onChangeDoNotshow}
+                                />
+                            </div>
                         </div>
+                    }
+                    <div className='right-panel-dialog bg-white'>
                         {
-                            showProgressBar || state.status == "RUNNING" || state.status == "IN_QUEUE" ?
-                                <div className="main-text">
-                                    {state.activity_obj?.header}
-                                </div> : null
-                        }
+                            state.task_id ?
 
-                        {
-                            showProgressBar || state.status == "RUNNING" || state.status == "IN_QUEUE" ?
-                                <>
-                                    <div className="hint-text">
-                                        Please wait this might take some time..
+                                <Box sx={{
+                                    border: 'none',
+                                    '& > div > div': {
+                                        border: 'none !important',
+                                        boxShadow: 'none !important'
+                                    },
+                                    
+                                    '& [class^="makeStyles-cardFooter-"]': {
+                                        border: 'none !important',
+                                        backgroundColor: 'transparent !important',
+                                        padding: '16px 20px !important',
+                                        display: 'flex !important',
+                                        justifyContent: 'space-between !important',
+                                        alignItems: 'center !important',
+                                        position: 'relative !important',
+
+                                        '& .footer-left': {
+                                            display: 'flex !important',
+                                            alignItems: 'center !important',
+                                            gap: '12px !important'
+                                        },
+
+                                        '& .footer-right': {
+                                            display: 'flex !important',
+                                            gap: '12px !important',
+                                            alignItems: 'center !important',
+                                            justifyContent: 'flex-end !important',
+                                        },
+                                    },
+                                }}
+                                >
+                                    <div className='font-18 font-weight-600 color-white d-flex align-center space-between' style={{ backgroundColor: '#fff', padding: '13.5px 20px' }}>
+                                        <button
+                                            className='btn float-cancel-button'
+                                            style={showInfoSection ? { left: '396px' } : state.showLeftPanel ? {} : { left: '396px' }}
+                                            onClick={handleClose}
+                                        >
+                                            <span className='ri-close-line'></span>
+                                        </button>
                                     </div>
-                                    <div className="linear-progressbar mt-16">
-                                        <LinearProgress variant={showProgressBar || state.status == "RUNNING" || state.status == "IN_QUEUE" ? "indeterminate" : "determinate"} value={progress} />
-                                    </div>
-                                </> :
-
+                                    <StepProgressDetailed
+                                        task_id={state.task_id}
+                                        variant="SAME_PAGE_REDIRECT"
+                                        type="new"
+                                        placeholders={{}}
+                                        refresh={closeDialogAndGetAttachedVMS}
+                                        handleClickToSkip={closeDialogAndGetAttachedVMS}
+                                        handleContinueToNextTab={closeDialogAndGetAttachedVMS}
+                                        handleRefresh={closeDialogAndGetAttachedVMS}
+                                    />
+                                </Box>
+                                :
                                 <>
-                                    {
-                                        state.status == "FAILED" ?
-                                            <>
-                                                <div className="main-text">
-                                                    {state.activity_obj?.fail_message}
-                                                </div>
-                                                <Tooltip title={state.description}>
-                                                    <div className="isa_info custom-box-new border-danger" style={{ marginTop: '30px', margin: 'auto', width: "100% !important", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                                                        <span className="text-ellipsis-multiline color-E1941D" style={{ overflow: 'hidden', width: "70%" }} >{state.description}</span>
-                                                    </div>
-                                                </Tooltip>
+                                    <div className='font-18 font-weight-600 color-white d-flex align-center space-between' style={{ backgroundColor: '#0086ff', padding: '13.5px 20px' }}>
+                                        <p>{edit_id ? "Edit" : "Add"} Virtual Machine</p>
+                                        <button
+                                            className='btn float-cancel-button'
+                                            style={showInfoSection ? { left: '396px' } : state.showLeftPanel ? {} : { left: '396px' }}
+                                            onClick={handleClose}
+                                        >
+                                            <span className='ri-close-line'></span>
+                                        </button>
+                                    </div>
+                                    {showLoading || saveLoading ? <Loading varient="light" /> :
+                                        <>
+                                            <div className='' style={{ padding: '10px 20px', height: 'calc( 100vh - 150px )', overflowY: 'auto' }}>
+                                                <Grid container spacing={2}>
+                                                    {/* <Grid item lg={6}>
+                                                        {
+                                                         state.error_msg ? <AlertStrip message={state.error_msg} /> : null
+                                                        }
+                                                    </Grid>  */}
+                                                    <Grid item lg={12}>
+                                                        <p style={{ padding: "20px 0px 8px 0px" }} className="font-14 font-weight-600 color-header-new">Please fill the following Details</p>
+                                                    </Grid>
 
-                                            </> : null
-                                    }
-                                    {
-                                        state.status == "SUCCESS" ?
-                                            <>
-                                                <div className="main-text">
-                                                    {state?.activity_obj?.success_message}
-                                                </div>
-                                                <div className="hint-text">
+
+                                                    <Grid item lg={6} className='input-mb-0'>
+                                                        <Input
+                                                            type="text"
+                                                            label="User Name"
+                                                            name="user_name"
+                                                            mandatorySign
+                                                            placeholder="Enter"
+                                                            maxLength={30}
+                                                            info={"The VM username for SSH (Secure Shell) is the specific username used to authenticate and log in to a virtual machine (VM) remotely via SSH protocol. The SSH username typically corresponds to a user account configured within the VM's operating system."}
+                                                            data={state.data}
+                                                            error={state.error}
+                                                            onChangeHandler={commonFunctions.onChangeHandler}
+                                                        />
+                                                    </Grid>
+                                                    <Grid item lg={6} className='input-mb-0'>
+                                                        <Input
+                                                            type="text"
+                                                            label="Ip Address"
+                                                            name="ip_address"
+                                                            placeholder="Enter"
+                                                            maxLength={30}
+                                                            info={"The VM IP address for SSH refers to the specific IP address assigned to a virtual machine (VM) that allows remote access via the Secure Shell (SSH) protocol."}
+                                                            mandatorySign
+                                                            data={state.data}
+                                                            error={state.error}
+                                                            onChangeHandler={commonFunctions.onChangeHandler}
+                                                        />
+                                                    </Grid>
+                                                    <Grid item lg={12} className='input-mb-0'>
+                                                        <Input
+                                                            type="text"
+                                                            label="VM Name"
+                                                            name="vm_name"
+                                                            placeholder="Enter"
+                                                            maxLength={30}
+                                                            info={"In Buildpiper, for a monolithic application, we need to onboard the infrastructure required for deployment for the monolithic applications. This infrastructure is nothing but of VMs (virtual machines). Thus a virtual machine (VM) is a software-based unit of a LDC - Local data centre which runs an operating system and applications just like a physical computer but relies on virtualization technology to operate."}
+                                                            mandatorySign
+                                                            data={state.data}
+                                                            error={state.error}
+                                                            onChangeHandler={commonFunctions.onChangeHandler}
+                                                        />
+                                                    </Grid>
+                                                    <Grid item lg={12} className='input-mb-0'>
+                                                        <Input
+                                                            type="text"
+                                                            label="Port"
+                                                            name="port"
+                                                            placeholder="Enter"
+                                                            maxLength={20}
+                                                            // info={"In Buildpiper, for a monolithic application, we need to onboard the infrastructure required for deployment for the monolithic applications. This infrastructure is nothing but of VMs (virtual machines). Thus a virtual machine (VM) is a software-based unit of a LDC - Local data centre which runs an operating system and applications just like a physical computer but relies on virtualization technology to operate."}
+                                                            info={
+                                                                "Port defines the entry point for network communication with the virtual machine. It tells the system which service or process should receive the connection."
+                                                            }
+                                                            mandatorySign
+                                                            data={state.data}
+                                                            error={state.error}
+                                                            onChangeHandler={commonFunctions.onChangeHandler}
+                                                        />
+                                                    </Grid>
+                                                    <Grid item lg={12} className='input-mb-0'>
+                                                        <Input
+                                                            type="tagged-input"
+                                                            name="add_primary_tag"
+                                                            label="Primary Tags"
+                                                            placeholder="Enter"
+                                                            maxLength={8}
+                                                            info={"Primary and Secondary tags are labels applied to VM groups. When deploying monolithic applications on VM groups, users can prioritize deployment to specific VMs by specifying these tags."}
+                                                            data={state.data}
+                                                            error={state.error}
+                                                            onChangeHandler={onChangeHandlerForKeyValue}
+
+                                                        />
+                                                    </Grid>
+                                                    <Grid item lg={12} className='input-mb-0'>
+                                                        <Input
+                                                            type="tagged-input"
+                                                            name="add_secondary_tag"
+                                                            label="Secondary Tags"
+                                                            placeholder="Enter"
+                                                            maxLength={8}
+                                                            info={"During deployment, the process first searches for VM groups with the primary label. If the resources meet the requirements, the deployment is scheduled on the VMs tagged as primary. Otherwise, it proceeds to VMs tagged as secondary."}
+                                                            data={state.data}
+                                                            error={state.error}
+                                                            onChangeHandler={onChangeHandlerForKeyValue}
+
+
+                                                        />
+                                                    </Grid>
+                                                    <Grid item lg={12} className='input-mb-0'>
+                                                        <Input
+                                                            type="select"
+                                                            name="collection_method"
+                                                            info={<>
+                                                                - SSH-based authentication refers to the method of authenticating and establishing a secure connection between a client and a server using the Secure Shell (SSH) protocol.
+                                                                <br />
+                                                                - Password-based authentication to a virtual machine (VM) refers to the method of authenticating access to the VM using a username and password combination.
+                                                            </>}
+                                                            mandatorySign
+                                                            label="Connection Method"
+                                                            list={connectionMethodList}
+                                                            data={state.data}
+                                                            error={state.error}
+                                                            onChangeHandler={commonFunctions.onChangeHandler}
+                                                        />
+                                                    </Grid>
+
                                                     {
-                                                        hintText
+                                                        state.data.collection_method == "USERNAME_PASSWORD" &&
+                                                        <>
+                                                            <Grid item xs={12} >
+                                                                <Input
+                                                                    type="select"
+                                                                    name="credential"
+                                                                    list={credentialsList}
+                                                                    label="Select Secrets"
+                                                                    placeholder="test-username"
+                                                                    mandatorySign
+                                                                    onChangeHandler={commonFunctions.onChangeHandler}
+                                                                    data={state.data}
+                                                                    error={state.error}
+                                                                    extraDiv={
+                                                                        <Link className='text-anchor-blue d-flex align-center' to="/secrets/add"><i className="ri-add-line"></i> New Secret</Link>
+                                                                    }
+                                                                />
+                                                            </Grid>
+                                                        </>
+
                                                     }
+                                                    {
+                                                        state.data.collection_method === "SSH_KEY" &&
+                                                        <Grid item lg={12} className='input-mb-0'>
+                                                            <div className='d-flex align-center space-between' style={{ border: '1px solid #e0e0e0', padding: '12px', borderRadius: '4px' }}>
+                                                                <div className="d-flex align-center">
+                                                                    <span className="ri-key-2-line mr-10 font-18 color-grey"></span>
+                                                                    <span className="font-14 color-black">Authentication Key</span>
+                                                                </div>
+                                                                <button
+                                                                    className='btn btn-transparent-primary font-weight-600'
+                                                                    onClick={() => setOpenKeyDialog(true)}
+                                                                >
+                                                                    View Public Key
+                                                                </button>
+                                                            </div>
+                                                        </Grid>
+                                                    }
+
+
+                                                </Grid>
+
+                                            </div>
+
+
+
+                                            <Grid item lg={12} >
+                                                <div className="footer-right-panel">
+                                                    <button
+                                                        className="btn btn-primary"
+                                                        onClick={testAndSaveData}
+
+                                                    >
+                                                        {edit_id ? "UPDATE" : "TEST & SAVE"}{" "}
+                                                    </button>
                                                 </div>
-                                            </> : null
-                                    }
+                                            </Grid>
+
+                                        </>}
                                 </>
                         }
-                        <div className={newTypeClases.contentbox}>
-                            <div className='msg-box'>
-                                {
-                                    state.sub_task_status.map((task, index) => (
-                                        <div className={"msg-div"} style={index == state.sub_task_status.length - 1 ? { borderBottom: "none" } : {}}>
-                                            <div className='d-flex align-center' style={{ gap: "12px" }}>
-                                                <div className={task.status == "SUCCESS" ? "success" : task.status == "FAILED" ? "failed" : "running"}>
-                                                    {task.status == "SUCCESS" ? <span className="ri-check-fill font-16"></span>
-                                                        : null}
-                                                    {task.status == "FAILED" ? <span className="ri-error-warning-line color-E1941D font-16"></span>
-                                                        : null}
-                                                    {task.status == "RUNNING" || task.status == "IN_QUEUE" ? <span className="ri-settings-3-line font-16"></span>
-                                                        : null}
-                                                </div>
-                                                <Tooltip title={task.activity_sub_task} TransitionComponent={Zoom}>
-                                                    <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{task.activity_sub_task}</span>
-                                                </Tooltip>
-
-                                            </div>
-                                            <div className="d-flex align-center" style={{ gap: '10px' }}>
-                                                {
-                                                    task.payload_json && task.payload_json.task_id ?
-
-                                                        <Link to={"/logs?global_task_id=" + task.payload_json.task_id} target="_blank" className="mr-5 btn-link d-flex align-center">
-                                                            <i class="ri-eye-line"></i>
-                                                            <span>View Logs</span>
-                                                        </Link>
-                                                        : null
-                                                }
-                                                {task.status == "SUCCESS" ? <span className="color-success font-12 font-weight-600">Success</span>
-                                                    : null}
-                                                {task.status == "FAILED" ? <span className="color-danger font-12 font-weight-600">Failed</span>
-                                                    : null}
-                                                {task.status == "RUNNING" || task.status == "IN_QUEUE" ? <RunningDotsComponent isFromEventSidePannel={true} />
-                                                    : null}
-                                            </div>
-                                        </div>
-                                    ))
-                                }
-                            </div>
-                        </div>
-
 
                     </div>
-                    {showProgressBar ?
-                        <div className={newTypeClases.cardFooter}>
-                            <div className="footer-left">
-                                {/* <div className="btn-section d-flex align-center"> */}
-                                {
-                                    skipButtonRequired ?
-                                        <button className='btn btn-outline-primary' onClick={handleClickToSkip}>Skip</button> : null
-                                }
-                            </div>
-                            <div className="footer-right">
-                                <a href={"/logs?global_task_id=" + task_id + "&num=" + state.triggered_service?.id + "&service_name=" + state.triggered_service?.entity_detail?.component?.name + "&service_env=" + state.triggered_service?.entity_detail?.component_env?.name} target="_blank" className="view-log-btn font-12 avtar">View Logs</a>
-                            </div>
-                        </div>
-                        :
+                </div>
+            </Dialog>
+            {openKeyDialog && (
+                <PublicKeyResultDialog
+                    open={openKeyDialog}
+                    onClose={() => setOpenKeyDialog(false)}
+                    SSHKey={sshKey}
+                />
+            )}
+            <Snackbar
+                anchorOrigin={{
+                    vertical: 'top',
+                    horizontal: 'right',
+                }}
+                open={state.show_save_msg === "success" || state.show_save_msg === "failed"}
+                onClose={handleCloseAlert}
+                autoHideDuration={3000}>
+                {
+                    state.error_msg ? <AlertStrip message={state.error_msg} /> : null
+                }
+                {
+
+                    state.show_save_msg === "success" ?
                         <>
-                            {state.status == "SUCCESS" ? (
-                                <div className={newTypeClases.cardFooter}>
-
-                                    {props.variant == "SAME_PAGE_REDIRECT" ? (
-                                        <>
-                                        <a href={"/logs?global_task_id=" + task_id + "&num=" + state.triggered_service?.id + "&service_name=" + state.triggered_service?.entity_detail?.component?.name + "&service_env=" + state.triggered_service?.entity_detail?.component_env?.name} target="_blank" className="view-log-btn font-12 avtar">View Logs</a>
-
-                                            {/* <div className="footer-left"></div> */}
-                                            <div className="footer-right">
-                                               
-
-                                                <button className="btn btn-primary avtar font-weight-600" style={{ height: "40px" }} onClick={handleRefresh}>{btnLabel ? btnLabel : "CONTINUE"}</button>
-                                            </div>
-                                        </>
-                                    ) :
-                                        props.variant === "cluster_onboarding" ? (
-                                            <>
-                                                <div className="footer-left"></div>
-
-                                                <a href={"/logs?global_task_id=" + task_id + "&num=" + state.triggered_service?.id + "&service_name=" + state.triggered_service?.entity_detail?.component?.name + "&service_env=" + state.triggered_service?.entity_detail?.component_env?.name} target="_blank" className="view-log-btn font-12 avtar">View Logs</a>
-
-
-                                                <Link to={success_page} onClick={() => UpdateClusterDataForNavigation()}> <button className="btn btn-primary font-weight-600 avtar" style={{ height: "40px" }}>{btnLabel ? btnLabel : "Finish Setup"}</button></Link>
-                                            </>
-                                        )
-                                            : (
-                                                <>
-                                                    <div className="footer-left"></div>
-
-                                                    <a href={"/logs?global_task_id=" + task_id + "&num=" + state.triggered_service?.id + "&service_name=" + state.triggered_service?.entity_detail?.component?.name + "&service_env=" + state.triggered_service?.entity_detail?.component_env?.name} target="_blank" className="view-log-btn font-12 avtar">View Logs</a>
-
-                                                    <Link to={success_page}> <button className="btn btn-primary font-weight-600 avtar" style={{ height: "40px" }}>{btnLabel ? btnLabel : "Finish Setup"}</button></Link>
-                                                </>
-                                            )}
-                                </div>) : null
-                            }
-                            {state.status == "FAILED" ?
-                                <div className={newTypeClases.cardFooter}>
-                                    <a href={"/logs?global_task_id=" + task_id + "&num=" + state.triggered_service?.id + "&service_name=" + state.triggered_service?.entity_detail?.component?.name + "&service_env=" + state.triggered_service?.entity_detail?.component_env?.name} target="_blank" className="view-log-btn font-12 avtar font-weight-600">View Logs</a>
-                                    <div className="footer-right">
-                                        <div className="d-flex" style={{ gap: "12px" }}>
-                                          
-                                            {
-                                                props.variant == "cluster_onboarding" ?
-                                                    <button className="re-configure-btn font-12  font-weight-500 avtar" onClick={handleRefresh}>Re-configure</button>
-                                                    :
-                                                    <button onClick={handleRefresh} className="btn btn-primary retry-btn font-12 font-weight-500 avtar">Retry</button>
-
-                                            }
-                                        </div>
-                                        {state.sub_task_status[2]?.status === "FAILED" ?
-
-                                            <Link
-                                                to={{
-                                                    pathname: "/cluster-permissions",
-                                                    state: {
-                                                        cluster_id: state.triggered_service ? state.triggered_service.entity_id : null,
-                                                        task_id: task_id,
-                                                    },
-                                                }}
-                                            >
-                                                <button className="view-permisson-btn font-12 avtar">
-                                                    <span className="font-weight-600">View Permission</span>
-                                                </button>
-                                            </Link>
-                                            : null
-                                        }
-                                    </div>
-
-                                </div> : null
-                            }
-
-                        </>
-                    }
-                    {/* {state.view_logs ? <ViewLogsInfiniteScroll1 selected_tab_id={state.selected_tab_id} closeLogs={closeLogs} closeTab={closeTab} changeTab={changeTab} tabsData={state.logMetadata} childInherits={state.infiniteScrollInherits} /> : null} */}
-
-
-                </div>
-            </div>
-            :
-            type == "config-db-changes" ?
-                <div className={classes.root}>
-                    <div className={configDbChanges.root}>
-                        {
-                            state.error ?
-                                <ErrorComponent error={state.error} /> : null
-                        }
-
-
-                        <div className={configDbChanges.cardBody}>
-                            <div className="d-flex justify-end width-full">
-                                {
-                                    props.variant == "SAME_PAGE_REDIRECT" ?
-                                        <button className="btn btn-transparent" onClick={handleRefresh}>
-                                            
-                                            <span className='ri-close-fill font-20 color-value'></span>
-                                        </button>
-                                        :
-                                        closeClick ?
-                                            <button className="btn btn-transparent" onClick={closeClick}>
-                                               
-                                                <span className='ri-close-fill font-20 color-value'></span>
-                                            </button>
-                                            :
-                                            <Link to={success_page}>  <button className="btn btn-transparent">
-                                                <span className='ri-close-fill font-20 color-value'></span>
-                                            </button></Link>
-                                }
-
-                            </div>
-
-
-                            {
-                                showProgressBar || state.status == "RUNNING" || state.status == "IN_QUEUE" ?
-                                    <div className="main-text">
-                                        {state.activity_obj?.header}
-                                    </div> : null
-                            }
-
-                            {
-                                showProgressBar || state.status == "RUNNING" || state.status == "IN_QUEUE" ?
-                                    <>
-                                        <div className="hint-text">
-                                            Validating Changes for deployment
-                                        </div>
-                                        <div className="linear-progressbar mt-16">
-                                            <LinearProgress variant={showProgressBar || state.status == "RUNNING" || state.status == "IN_QUEUE" ? "indeterminate" : "determinate"} value={progress} />
-                                        </div>
-                                    </> :
-
-                                    <>
-                                        {
-                                            state.status == "FAILED" ?
-                                                <>
-                                                    <div className="main-text">
-                                                        {state.activity_obj?.fail_message}
-                                                    </div>
-                                                    <Tooltip title={state.description}>
-                                                        <div className="isa_info custom-box-new border-danger" style={{ marginTop: '30px', margin: 'auto', width: "100% !important", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                                                            <span className="text-ellipsis-multiline color-E1941D" style={{ overflow: 'hidden', width: "70%" }} >{state.description}</span>
-                                                        </div>
-                                                    </Tooltip>
-
-                                                </> : null
-                                        }
-                                        {
-                                            state.status == "SUCCESS" ?
-                                                <>
-                                                    <div className="main-text">
-                                                        Do you want to approve deployment?
-                                                    </div>
-                                                    <div className="hint-text">
-                                                        Change Detection Completed
-                                                    </div>
-                                                </> : null
-                                        }
-                                    </>
-                            }
-
-
-                            <div className={configDbChanges.contentbox}>
-                                <div className='msg-box'>
-                                    {
-                                        state.sub_task_status.map((task, index) => (
-                                            <div className={"msg-div"} style={index == state.sub_task_status.length - 1 ? { borderBottom: "none" } : {}}>
-                                                <div className='d-flex align-center' style={{ gap: "12px" }}>
-                                                    <div className={task.status == "SUCCESS" ? "success" : task.status == "FAILED" ? "failed" : "running"}>
-                                                        {task.status == "SUCCESS" ? <span className="ri-check-fill font-16"></span>
-                                                            : null}
-                                                        {task.status == "FAILED" ? <span className="ri-error-warning-line color-E1941D font-16"></span>
-                                                            : null}
-                                                        {task.status == "RUNNING" || task.status == "IN_QUEUE" ? <span className="ri-settings-3-line font-16"></span>
-                                                            : null}
-                                                    </div>
-                                                    <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{task.activity_sub_task}</span>
-                                                </div>
-                                                <div className="d-flex align-center" style={{ gap: '10px' }}>
-                                                    {
-                                                        task.payload_json && task.payload_json.task_id ?
-
-                                                            <Link to={"/logs?global_task_id=" + task.payload_json.task_id} target="_blank" className="mr-5 btn-link d-flex align-center">
-                                                                <i class="ri-eye-line"></i>
-                                                                <span>View Logs</span>
-                                                            </Link>
-                                                            : null
-                                                    }
-                                                    {task.status == "SUCCESS" ?
-                                                        task.payload_json.changes_detected ?
-                                                            <span className="color-warning font-12 font-weight-600">CHANGE DETECTED</span>
-                                                            :
-                                                            <span className="color-success font-12 font-weight-600">NO CHANGE DETECTED</span>
-                                                        : null
-                                                    }
-                                                    {task.status == "FAILED" ? <span className="color-danger font-12 font-weight-600">Failed</span>
-                                                        : null}
-                                                    {task.status == "RUNNING" || task.status == "IN_QUEUE" ? <RunningDotsComponent isFromEventSidePannel={true} />
-                                                        : null}
-                                                </div>
-                                            </div>
-                                        ))
-                                    }
-                                </div>
-                            </div>
-
-
-                        </div>
-                        {showProgressBar ?
-                            <div className={configDbChanges.cardFooter}>
-                                <div className="btn-section d-flex align-center">
-                                    {
-                                        skipButtonRequired ?
-                                            <button className='btn btn-outline-primary' onClick={handleClickToSkip}>Skip</button> : null
-                                    }
-                                    <a href={"/logs?global_task_id=" + task_id} target="_blank" className="view-log-btn font-12 avtar">View Logs</a>
-                                </div>
-                            </div>
-                            :
-                            <>
-                                {state.status == "SUCCESS" ?
-                                    <div className={configDbChanges.cardFooter}>
-
-                                        <a href={"/logs?global_task_id=" + task_id} target="_blank" className="view-log-btn font-12 avtar">View Logs</a>
-
-                                        {
-                                            <button className="btn btn-primary avtar font-weight-600" style={{ height: "40px" }} onClick={handleContinueToNextTab}>CONTINUE</button>
-                                            // props.variant == "SAME_PAGE_REDIRECT" ?
-                                            //     <button className="btn btn-primary avtar font-weight-600" style={{ height: "40px" }} onClick={handleRefresh}>{btnLabel ? btnLabel : "Finish Setup"}</button>
-                                            //     :
-                                            //     <Link to={success_page}> <button className="btn btn-primary font-weight-600 avtar" style={{ height: "40px" }}>{btnLabel ? btnLabel : "Finish Setup"}</button></Link>
-                                        }
-
-
-                                    </div> : null
-                                }
-                                {state.status == "FAILED" ?
-                                    <div className={configDbChanges.cardFooter}>
-
-                                        <a href={"/logs?global_task_id=" + task_id} target="_blank" className="view-log-btn font-12 avtar">View Logs</a>
-
-
-                                        {
-                                            <button className="btn btn-primary avtar font-weight-600" style={{ height: "40px" }} onClick={handleContinueToNextTab}>CONTINUE</button>
-                                            // props.variant == "SAME_PAGE_REDIRECT" ?
-                                            //     <button className="btn btn-primary avtar font-weight-600" style={{ height: "40px" }} onClick={handleRefresh}>{btnLabel ? btnLabel : "Finish Setup"}</button>
-                                            //     :
-                                            //     <Link to={success_page}> <button className="btn btn-primary font-weight-600 avtar" style={{ height: "40px" }}>{btnLabel ? btnLabel : "Finish Setup"}</button></Link>
-                                        }
-
-
-                                    </div> : null
-                                }
-                                {state.status == "RUNNING" ?
-                                    <div className={configDbChanges.cardFooter}>
-                                        {
-                                            <button className="btn btn-disable avtar font-weight-600" style={{ height: "40px" }} onClick={() => { }}>CONTINUE</button>
-                                            // props.variant == "SAME_PAGE_REDIRECT" ?
-                                            //     <button className="btn btn-primary avtar font-weight-600" style={{ height: "40px" }} onClick={handleRefresh}>{btnLabel ? btnLabel : "Finish Setup"}</button>
-                                            //     :
-                                            //     <Link to={success_page}> <button className="btn btn-primary font-weight-600 avtar" style={{ height: "40px" }}>{btnLabel ? btnLabel : "Finish Setup"}</button></Link>
-                                        }
-                                    </div> : null
-                                }
-
-                            </>
-                        }
-                        {/* {state.view_logs ? <ViewLogsInfiniteScroll1 selected_tab_id={state.selected_tab_id} closeLogs={closeLogs} closeTab={closeTab} changeTab={changeTab} tabsData={state.logMetadata} childInherits={state.infiniteScrollInherits} /> : null} */}
-
-
-                    </div>
-                </div>
-                :
-                <div className={classes.root + " " + "manual-height"}>
-                    <div className={classes.card}>
-                        {
-                            state.error ?
-                                <ErrorComponent error={state.error} /> : null
-                        }
-
-
-                        <div className={classes.cardBody}>
-                            <div className="d-flex space-between mb-50 mt-20">
-                                {
-                                    state.status == "SUCCESS" ?
-                                        <div></div> :
-                                        <button className="btn btn-transparent" onClick={handleRefresh}>
-                                            <i className="ri-arrow-left-s-line"></i> Back
-                                        </button>
-                                }
-
-                                {
-                                    props.variant == "SAME_PAGE_REDIRECT" ?
-                                        <button className="btn btn-transparent" onClick={handleRefresh}>
-                                            Skip <i className="ri-arrow-right-s-line"></i>
-                                        </button>
-                                        :
-                                        <Link to={success_page}>  <button className="btn btn-transparent">
-                                            Skip <i className="ri-arrow-right-s-line"></i>
-                                        </button></Link>
-                                }
-
-                            </div>
-
-
-                            {
-                                showProgressBar || state.status == "RUNNING" || state.status == "IN_QUEUE" ?
-                                    <div className="main-text">
-                                        {state.activity_obj?.header}
-                                    </div> : null
-                            }
-
-
-                            {
-                                showProgressBar || state.status == "RUNNING" || state.status == "IN_QUEUE" ?
-                                    <>
-                                        <div className="hint-text">
-                                            Please wait this might take some time..
-                                        </div>
-                                        <div className="linear-progressbar mt-20 mb-50">
-                                            <LinearProgress variant={showProgressBar || state.status == "RUNNING" || state.status == "IN_QUEUE" ? "indeterminate" : "determinate"} value={progress} />
-                                        </div>
-                                    </> :
-
-                                    <>
-
-                                        {
-                                            state.status == "FAILED" ?
-                                                <>
-                                                    <div className={classes.mainMsg} style={{ marginTop: '30px' }}>
-                                                        {state.activity_obj.fail_message}
-                                                    </div>
-                                                    <Tooltip title={state.description}>
-                                                        <div className="isa_info custom-box-new border-danger" style={{ marginTop: '30px', margin: 'auto', width: "100% !important", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                                                            <span className="text-ellipsis-multiline color-E1941D" style={{ overflow: 'hidden', width: "70%", textAlign: 'center' }} >{state.description}</span>
-                                                        </div>
-                                                    </Tooltip>
-
-                                                </> : null
-                                        }
-                                        {
-                                            state.status == "SUCCESS" ?
-                                                <>
-                                                    <div className={classes.mainMsg} style={{ marginTop: '30px' }}>
-                                                        {state?.activity_obj?.success_message}
-                                                    </div>
-                                                </> : null
-                                        }
-                                    </>
-                            }
-
-
-                            <div className={classes.contentbox}>
-
-                                {
-                                    state.sub_task_status.map(task => (
-                                        <div className="msg-div">
-                                            <div className="icon-circle success">
-                                                {task.status == "SUCCESS" ? <span className="flaticon-check-symbol"></span>
-                                                    : null}
-                                                {task.status == "FAILED" ? <span className=" ri-error-warning-line font-24"></span>
-                                                    : null}
-                                                {task.status == "RUNNING" || task.status == "IN_QUEUE" ? <span className="flaticon-clock-with-white-face"></span>
-                                                    : null}
-                                            </div>
-                                            <Tooltip title={task.activity_sub_task} TransitionComponent={Zoom}>
-                                                <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{task.activity_sub_task}</span>
-                                            </Tooltip>
-                                            <div className="d-flex align-center" style={{ gap: '10px' }}>
-                                                {
-                                                    task.payload_json && task.payload_json.task_id ?
-
-                                                        <Link to={"/logs?global_task_id=" + task.payload_json.task_id} target="_blank" className="mr-5 btn-link d-flex align-center">
-                                                            <i class="ri-eye-line font-14"></i>
-                                                            <span>View Logs</span>
-                                                        </Link>
-                                                        : null
-                                                }
-                                                {task.status == "SUCCESS" ? <span className="color-success">Success</span>
-                                                    : null}
-                                                {task.status == "FAILED" ? <span className="color-danger">Failed</span>
-                                                    : null}
-                                                {task.status == "RUNNING" || task.status == "IN_QUEUE" ? <span className="color-pending">Running</span>
-                                                    : null}
-                                            </div>
-                                        </div>
-                                    ))
-                                }
-
-                            </div>
-
-
-                        </div>
-                        {showProgressBar ?
-                            <div className={classes.cardFooter}>
-                                <div className="btn-section">
-                                    {
-                                        skipButtonRequired ?
-                                            <button className='btn btn-outline-primary' onClick={handleRefresh}>Skip</button> : null
-                                    }
-                                    <a href={"/logs?global_task_id=" + task_id + "&num=" + state.triggered_service?.id + "&service_name=" + state.triggered_service?.entity_detail?.component?.name + "&service_env=" + state.triggered_service?.entity_detail?.component_env?.name} target="_blank" className="btn btn-outline-default">View Logs</a>
-                                </div>
-                            </div>
-                            :
-                            <>
-                                {state.status == "SUCCESS" ?
-                                    <div className={classes.cardFooter}>
-                                        <div className="btn-section">
-
-                                            <a href={"/logs?global_task_id=" + task_id + "&num=" + state.triggered_service?.id + "&service_name=" + state.triggered_service?.entity_detail?.component?.name + "&service_env=" + state.triggered_service?.entity_detail?.component_env?.name} target="_blank" className="btn btn-outline-default">View Logs</a>
-
-
-                                            {
-                                                props.variant == "SAME_PAGE_REDIRECT" ?
-                                                    <button className="btn btn-primary" onClick={handleRefresh}>Continue</button>
-                                                    :
-                                                    <Link to={success_page}> <button className="btn btn-primary">Continue</button></Link>
-                                            }
-
-                                        </div>
-                                    </div> : null
-                                }
-                                {state.status == "FAILED" ?
-                                    <div className={classes.cardFooter}>
-                                        <div className="btn-section">
-                                            {
-                                                props.variant == "SAME_PAGE_REDIRECT" ?
-                                                    <button className="btn btn-outline-default" onClick={handleRefresh}>Continue</button>
-                                                    :
-                                                    <Link to={success_page}> <button className="btn btn-outline-default">Continue</button></Link>
-                                            }
-
-                                            <div className="d-flex">
-                                                <a href={"/logs?global_task_id=" + task_id + "&num=" + state.triggered_service?.id + "&service_name=" + state.triggered_service?.entity_detail?.component?.name + "&service_env=" + state.triggered_service?.entity_detail?.component_env?.name} target="_blank" className="btn btn-outline-default">View Logs</a>
-                                                {/* <button className="btn btn-outline-default" onClick={fetchLogs}>View Logs</button> */}
-                                                {
-                                                    props.variant == "cluster_onboarding" ?
-                                                        <button className="btn btn-primary" onClick={handleRefresh}>Retry</button>
-                                                        :
-                                                        <button onClick={triggerBuildDeploy} className="btn btn-primary">Retry</button>
-
-                                                }
-                                            </div>
-
-                                        </div>
-                                    </div> : null
-                                }
-
-
-                            </>
-
-                        }
-                        {/* {state.view_logs ? <ViewLogsInfiniteScroll1 selected_tab_id={state.selected_tab_id} closeLogs={closeLogs} closeTab={closeTab} changeTab={changeTab} tabsData={state.logMetadata} childInherits={state.infiniteScrollInherits} /> : null} */}
-
-                    </div>
-                </div>
-
-
+                            <Alert severity="success" variant="filled">
+                                {state.success_msg}
+                            </Alert>
+                        </> : state.show_save_msg === "failed" ?
+                            <Alert severity="error" variant="filled">
+                                {state.error_in_save}
+                            </Alert>
+
+                            : null
+                }
+            </Snackbar>
+        </>
     )
 }
 
-StepProgressDetailed.propTypes = {
-    ...PropTypes.objectOf(PropTypes.any),
-}
-
-export default StepProgressDetailed;
+export default AddSingleVMDialog
 
 
-const useStyles = makeStyles(theme => ({
+const useStyles = makeStyles((theme) => ({
     root: {
-        height: '90vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        width: '100%',
-        position: 'relative'
+        '&.dialog-align-corner': {
+            '& .MuiPaper-root': {
+                maxWidth: '1100px'
+            }
 
-    },
-    card: {
-        borderRadius: '4px',
-        border: '1px solid #e4e4e4',
-        overflow: 'hidden',
-        width: '65rem',
-        margin: '16rem auto',
-        background: '#fff',
-        '& #viewFullLogs': {
-            left: '0px',
-            bottom: '-10rem'
-        }
-    },
-    cardHeader: {
-        borderBottom: '1px solid #e4e4e4',
-        padding: '15px',
-        backgroundColor: '#f9f9f9',
-        fontSize: '16px',
-    },
-    cardBody: {
-        '& .main-text': {
-            fontSize: '32px',
-            textAlign: 'center',
-            fontWeight: 300,
-            color: '#000'
         },
-        '& .linear-progressbar': {
-            padding: '0px 110px',
-            '& .MuiLinearProgress-root': {
-                height: '7px'
-            },
-            '& .MuiLinearProgress-colorPrimary': {
-                backgroundColor: '#eaeaea',
-                borderRadius: '4px'
-
-            },
-            '& .MuiLinearProgress-barColorPrimary': {
-                backgroundColor: '#0db79b'
+        '& .chip-wrapper-primary': {
+            backgroundColor: '#0086ff',
+            fontSize: '14px',
+            fontWeight: '500',
+            color: '#fff'
+        },
+        '& .input-with-icon': {
+            position: 'relative',
+            '& .cent-icon': {
+                width: '40px',
+                height: '44px',
+                backgroundColor: '#fafafa',
+                position: 'absolute',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '14px',
+                fontWeight: 500,
+                top: '22px',
+                right: '1px',
+                borderRadius: '0px 4px 4px 0px',
+                borderLeft: '1px solid #b7b7b7'
             }
         },
-        '& .hint-text': {
-            textAlign: 'center',
-            display: 'block',
-            marginBottom: '10px',
-            fontSize: '12px'
+        '& .left-panel-dialog': {
+            width: '396px',
+            transition: 'width 5s',
+
+            '& .left-panel-header': {
+                borderBottom: '1px solid #f1f1f1'
+            },
+            '& .checkbox-only-divi': {
+                position: 'absolute',
+                bottom: '10px'
+            },
         },
-        '& .border-danger': {
-            border: '2px solid #ff5252',
-            color: '#ff5252',
-            backgroundColor: '#ffe9e9'
-        }
-    },
-    contentbox: {
-        margin: '20px auto 0px',
-        display: 'flex',
-        alignItems: 'center',
-        flexDirection: 'column',
-        borderTop: '1px solid #dedede',
-        '& .msg-div': {
-            display: 'grid',
-            gridTemplateColumns: '40px 220px 80px',
-            alignItems: 'center',
-            fontSize: '13px',
-            borderBottom: '1px solid #dedede',
-            width: '100%',
-            padding: '10px',
-            justifyContent: 'center',
-            '&:last-child': {
-                borderBottom: 'none'
-            }
+        '& .left-panel-dialog-down': {
+            width: '0px',
+            overflow: 'hidden',
+            transition: `'width 5s', 'overflow 1s'`,
+
         },
-        '& .icon-circle': {
-            height: '30px',
-            width: '30px',
-            margin: '0px 5px',
-            border: '2px solid transparent',
-            borderRadius: '50%',
+        '& .footer-right-panel': {
+            backgroundColor: '#ffffff',
+            position: 'absolute',
+            bottom: '0px',
+            width: '650px',
+            padding: '16px 25px',
             display: 'flex',
+            justifyContent: 'flex-end',
             alignItems: 'center',
-            justifyContent: 'center',
-            '& .flaticon-check-symbol': {
-                color: '#0db79b',
-                lineHeight: 1,
-                '&:before': {
-                    fontSize: '18px'
-                }
-            },
-            '& .fa': {
-                color: '#ff5252',
-                lineHeight: 1,
-                '&:before': {
-                    fontSize: '22px'
-                }
-            },
-            '& .flaticon-clock-with-white-face': {
-                color: '#ffc002',
-                lineHeight: 1,
-                '&:before': {
-                    fontSize: '22px'
-                }
-            },
-            '&.success': {
-                borderColor: 'transparent'
-            },
-            '&.danger': {
-                borderColor: 'transparent',
-                backgroundColor: 'transparent'
-            },
-            '&.pending': {
-                color: '#ffc002',
-                backgroundColor: 'transparent',
-            }
-        },
-    },
-    cardFooter: {
-        borderTop: '1px solid #e4e4e4',
-        padding: '15px',
-        backgroundColor: '#f9f9f9',
-        '& .btn-section': {
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            '& .btn-primary': {
-                backgroundColor: '#0086FF',
-                color: '#fff',
-                '& .flaticon-keyboard-right-arrow-button-1': {
-                    color: '#fff',
-                    '&:before': {
-                        marginLeft: '0px!important'
-                    }
-                }
-            },
-            '& .btn-outline-default': {
-                color: '#6c757d',
-                border: '1px solid #cbcbcb!important',
-                backgroundColor: '#f9f9f9',
-                '&:hover': {
-                    color: '#6c757d!important',
-                    backgroundColor: '#f1f1f1',
-                }
+
+            // width:'100%',
+            '& button': {
+                marginBottom: '10px',
+
+                // marginLeft: 'auto'
             }
         }
-    },
-    mainMsg: {
-        fontSize: '24px',
-        padding: '20px 0px',
-        fontWeight: 300,
-        lineHeight: 1.2,
-        textAlign: 'center'
-    },
-
-}))
-
-const newTypeStyles = makeStyles(theme => ({
-    root: {
-        display: "flex",
-        width: "655px",
-        flexDirection: "column",
-        alignItems: "flex-start",
-        borderRadius: "8px",
-        border: "1px solid #DFDFDF",
-        background: "#FFF",
-    },
-    cardBody: {
-        display: "flex",
-        paddingTop: "12px",
-        flexDirection: "column",
-        alignItems: "center",
-        alignSelf: "stretch",
-        "& .main-text": {
-            fontSize: "18px",
-            fontWeight: "500",
-            color: "#124D9B",
-        },
-        '& .hint-text': {
-            fontSize: "14px",
-            fontWeight: "400",
-            color: "#2F2F2F",
-        },
-        '& .linear-progressbar': {
-            padding: '0px 110px',
-            width: "100%",
-            '& .MuiLinearProgress-root': {
-                height: '7px'
-            },
-            '& .MuiLinearProgress-colorPrimary': {
-                backgroundColor: '#eaeaea',
-                borderRadius: '4px'
-
-            },
-            '& .MuiLinearProgress-barColorPrimary': {
-                backgroundColor: '#0086FF'
-            }
-        },
-    },
-    contentbox: {
-        display: "flex",
-        width: "100%",
-        padding: "24px 20px",
-        flexDirection: "column",
-        alignItems: "center",
-        gap: "16px",
-        alignSelf: "stretch",
-        '& .view-log-btn': {
-            display: "flex",
-            height: "28px",
-            padding: "8px 16px",
-            justifyContent: "center",
-            alignItems: "center",
-            gap: "6px",
-            borderRadius: "6px",
-            border: "1px solid #9DC0EE",
-            background: "#FFF",
-            color: "#0086FF",
-            '&:hover': {
-                background: "#0086FF",
-                color: "#FFF",
-            },
-        },
-
-        '& .msg-box': {
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            alignSelf: "stretch",
-            borderRadius: "10px",
-            border: "1px solid #E6E6E6",
-        },
-        '& .first-msg-div': {
-
-        },
-        '& .last-msg-div': {
-
-        },
-        '& .msg-div': {
-            display: "flex",
-            padding: "10px 24px",
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: "10px",
-            alignSelf: "stretch",
-            borderBottom: "1px solid #E6E6E6",
-            '& .success': {
-                display: "flex",
-                padding: "4px",
-                alignItems: "center",
-                gap: "10px",
-                borderRadius: "50%",
-                background: "#E6FBEA",
-                color: "#129E5B",
-                height: "26px",
-            },
-            '& .failed': {
-                display: "flex",
-                padding: "4px",
-                alignItems: "center",
-                gap: "10px",
-                borderRadius: "50%",
-                background: "#FCF6E1",
-                color: "#C11212",
-                height: "26px",
-            },
-            '& .running': {
-                display: "flex",
-                padding: "4px",
-                alignItems: "center",
-                gap: "10px",
-                borderRadius: "50%",
-                background: "#EBF5FF",
-                color: "#0086FF",
-                height: "26px",
-            },
-            '& .color-success': {
-                display: "flex",
-                padding: "5px 8px",
-                justifyContent: "center",
-                alignItems: "center",
-                gap: "10px",
-                borderRadius: "6px",
-                background: "#E6FBEA",
-                color: "#129E5B",
-            },
-            '& .color-danger': {
-                display: "flex",
-                padding: "5px 8px",
-                justifyContent: "center",
-                alignItems: "center",
-                gap: "10px",
-                borderRadius: "6px",
-                background: "#FCF6E1",
-                color: "#E1941D",
-            }
-        },
-    },
-    cardFooter: {
-        display: "flex",
-        padding: "16px",
-        justifyContent: "flex-end",
-        alignItems: "center",
-        alignSelf: "stretch",
-        background: "#FAFAFA",
-        borderRadius: "8px",
-        gap: "12px",
-        '& .view-log-btn': {
-            display: "flex",
-            height: "40px",
-            padding: "8px 16px",
-            justifyContent: "center",
-            alignItems: "center",
-            gap: "6px",
-            borderRadius: "6px",
-            border: "1px solid #9DC0EE",
-            background: "#FFF",
-            color: "#0086FF",
-            fontSize: "12px",
-            '&:hover': {
-                background: "#0086FF",
-                color: "#FFF",
-            }
-        },
-        '& .re-configure-btn': {
-            display: "flex",
-            height: "40px",
-            padding: "11px 16px",
-            justifyContent: "center",
-            alignItems: "center",
-            gap: "6px",
-            borderRadius: "6px",
-            background: "#FEA111",
-            color: "#FFFFFF",
-            fontSize: "12px",
-            border: "none",
-            marginLeft: "12px",
-        },
-        "& .view-permisson-btn": {
-            border: "none",
-            display: "flex",
-            height: "40px",
-            padding: "8px 16px",
-            justifyContent: "center",
-            alignItems: "center",
-            gap: "6px",
-            borderRadius: "6px",
-            background: "#0086FF",
-            color: "#FFF",
-            '&:hover': {
-                background: "#03234D",
-                color: "#FFF",
-            },
-        },
     }
-}))
-
-const configDbChangesStyles = makeStyles(theme => ({
-    root: {
-        display: "flex",
-        width: "655px",
-        flexDirection: "column",
-        alignItems: "flex-start",
-        borderRadius: "8px",
-        border: "1px solid #DFDFDF",
-        background: "#FFF",
-    },
-    cardBody: {
-        display: "flex",
-        paddingTop: "12px",
-        flexDirection: "column",
-        alignItems: "center",
-        alignSelf: "stretch",
-        "& .main-text": {
-            fontFamily: "Montserrat",
-            fontSize: "18px",
-            fontWeight: "600",
-            color: "#2F2F2F"
-        },
-        '& .hint-text': {
-            fontFamily: "Montserrat",
-            fontSize: "14px",
-            fontWeight: "400",
-            color: "#2F2F2F"
-        },
-        '& .linear-progressbar': {
-            padding: '0px 110px',
-            width: "100%",
-            '& .MuiLinearProgress-root': {
-                height: '7px'
-            },
-            '& .MuiLinearProgress-colorPrimary': {
-                backgroundColor: '#eaeaea',
-                borderRadius: '4px'
-
-            },
-            '& .MuiLinearProgress-barColorPrimary': {
-                backgroundColor: '#0086FF'
-            }
-        },
-    },
-    contentbox: {
-        display: "flex",
-        width: "100%",
-        padding: "24px 20px",
-        flexDirection: "column",
-        alignItems: "center",
-        gap: "16px",
-        alignSelf: "stretch",
-        '& .view-log-btn': {
-            display: "flex",
-            height: "28px",
-            padding: "8px 16px",
-            justifyContent: "center",
-            alignItems: "center",
-            gap: "6px",
-            borderRadius: "6px",
-            border: "1px solid #9DC0EE",
-            background: "#FFF",
-            color: "#0086FF",
-            '&:hover': {
-                background: "#0086FF",
-                color: "#FFF",
-            },
-        },
-
-        '& .msg-box': {
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            alignSelf: "stretch",
-            borderRadius: "10px",
-            border: "1px solid #E6E6E6",
-        },
-        '& .first-msg-div': {
-
-        },
-        '& .last-msg-div': {
-
-        },
-        '& .msg-div': {
-            display: "flex",
-            padding: "10px 24px",
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: "10px",
-            alignSelf: "stretch",
-            borderBottom: "1px solid #E6E6E6",
-            '& .success': {
-                display: "flex",
-                padding: "4px",
-                alignItems: "center",
-                gap: "10px",
-                borderRadius: "50%",
-                background: "#E6FBEA",
-                color: "#129E5B",
-                height: "26px",
-            },
-            '& .failed': {
-                display: "flex",
-                padding: "4px",
-                alignItems: "center",
-                gap: "10px",
-                borderRadius: "50%",
-                background: "#FCF6E1",
-                color: "#C11212",
-                height: "26px",
-            },
-            '& .running': {
-                display: "flex",
-                padding: "4px",
-                alignItems: "center",
-                gap: "10px",
-                borderRadius: "50%",
-                background: "#EBF5FF",
-                color: "#0086FF",
-                height: "26px",
-            },
-            '& .color-success': {
-                display: "flex",
-                padding: "5px 8px",
-                justifyContent: "center",
-                alignItems: "center",
-                gap: "10px",
-                borderRadius: "6px",
-                background: "#E6FBEA",
-                color: "#129E5B",
-            },
-            '& .color-danger': {
-                display: "flex",
-                padding: "5px 8px",
-                justifyContent: "center",
-                alignItems: "center",
-                gap: "10px",
-                borderRadius: "6px",
-                background: "#FCF6E1",
-                color: "#E1941D",
-            },
-            '& .color-warning': {
-                display: "flex",
-                padding: "5px 8px",
-                justifyContent: "center",
-                alignItems: "center",
-                gap: "10px",
-                borderRadius: "6px",
-                background: "#FCF6E1",
-                color: "#E1941D",
-            },
-        },
-    },
-    cardFooter: {
-        display: "flex",
-        padding: "16px",
-        justifyContent: "flex-end",
-        alignItems: "center",
-        alignSelf: "stretch",
-        background: "#FAFAFA",
-        borderRadius: "8px",
-        gap: "12px",
-        '& .view-log-btn': {
-            display: "flex",
-            height: "40px",
-            padding: "8px 16px",
-            justifyContent: "center",
-            alignItems: "center",
-            gap: "6px",
-            borderRadius: "6px",
-            border: "1px solid #9DC0EE",
-            background: "#FFF",
-            color: "#0086FF",
-            fontSize: "12px",
-            '&:hover': {
-                background: "#0086FF",
-                color: "#FFF",
-            }
-        },
-        '& .re-configure-btn': {
-            display: "flex",
-            height: "40px",
-            padding: "11px 16px",
-            justifyContent: "center",
-            alignItems: "center",
-            gap: "6px",
-            borderRadius: "6px",
-            background: "#FEA111",
-            color: "#FFFFFF",
-            fontSize: "12px",
-            border: "none",
-            marginLeft: "12px",
-        },
-        "& .view-permisson-btn": {
-            border: "none",
-            display: "flex",
-            height: "40px",
-            padding: "8px 16px",
-            justifyContent: "center",
-            alignItems: "center",
-            gap: "6px",
-            borderRadius: "6px",
-            background: "#0086FF",
-            color: "#FFF",
-            '&:hover': {
-                background: "#03234D",
-                color: "#FFF",
-            },
-        },
-    }
-}))
+}));
