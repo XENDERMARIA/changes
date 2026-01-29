@@ -1,1065 +1,1407 @@
-import React, { useEffect, useState } from 'react'
-import PropTypes from 'prop-types'
+import React, { useState } from 'react';
+import PropTypes from 'prop-types';
 import { makeStyles } from '@mui/styles';
-import SearchBar from '../../../components/SearchBar';
-import { Loading } from '../../utils/Loading';
+import LinearProgress from '@mui/material/LinearProgress';
 import { Link } from 'react-router-dom';
-import properties from '../../../properties/properties';
-import GenerateURL, { GenerateSearchURL } from '../../../util/APIUrlProvider';
-import InvokeApi from '../../../util/apiInvoker';
-import Grid from '@mui/material/Grid';
-import Popover from '@mui/material/Popover';
-import Delete from '../../../components/genericComponents/Delete';
-import moment from 'moment';
-import PageHeader from '../../../components/PageHeader';
-import PaginationTwo from '../../../components/PaginationTwo';
-import AdvanceSearchFilterCombo from '../../../components/genericComponents/AdvanceSearchFilter/AdvanceSearchFilterCombo';
-import { useNavigate } from "react-router-dom";
-import SquareAvatar from '../../../components/genericComponents/AvatarSquare';
-import GenericSkeleton from '../../../components/genericComponents/Skeletons/GenericSkeleton';
-import BlankPage from '../../../components/BlankPage';
-import PageError from '../../../components/genericComponents/Errors/PageError';
+import properties from '../../properties/properties';
+import GenerateURL, { GenerateSearchURL } from '../../util/APIUrlProvider';
+import InvokeApi from '../../util/apiInvoker';
+import { ErrorComponent } from '../../views/utils/Error';
 import Tooltip from '@mui/material/Tooltip';
-import NewChip from '../../../components/newChip/NewChip';
-import AddVirtualMachineDialog from './AddVirtualMachineSet/AddVirtualMachineDialog';
-import Index from '../clusterList/components/Index';
+import Zoom from '@mui/material/Zoom';
+// import ViewLogsInfiniteScroll1, { getNewLogTab } from '../../views/service/listing/components/ViewLogsInfiniteScroll1';
+import RunningDotsComponent from '../../views/service/listing/components/componentLogsViewer/RunningDotsComponent';
+import { useCustomSnackbar } from '../../contexts/SnackbarContext';
+import { showErrorHandlerUpdated } from '../../util/util';
+import { UpdateClusterDataForNavigation } from '../../util/GlobalVars';
+const StepProgressDetailed = props => {
 
-const useStyles = makeStyles(() => ({
-  root: {
-    backgroundColor: "#fff",
-    padding: "20px",
-    minHeight: "calc(100vh - 70px)",
-    "& .table-view": {
-      border: "1px solid #E6E6E6",
-      borderRadius: "6px",
-      display: "grid",
-      gridTemplateColumns: "211px 211px 171px 212px 1fr",
-      fontWeight: 500,
-      color: "#2F2F2F",
-      fontSize: "12px",
+    const classes = useStyles();
+    const newTypeClases = newTypeStyles();
+    const configDbChanges = configDbChangesStyles();
+    const placeholders = props.placeholders;
+    const handleContinueToNextTab = props.handleContinueToNextTab;
+    const [progress] = React.useState(0);
+    const [state, setState] = useState({
+        activity_master: {},
+        sub_task_status: [],
+        status: "",
+        activity_obj: {
 
-      "& .table-view-row": {
-        // borderTop: "1px solid #e6e6e6",
-        borderBottom: "1px solid #e6e6e6",
-        padding: "9.5px 12px",
-        display: "flex",
-        alignItems: "center",
-        fontWeight: 600,
-        color: "#2f2f2f",
-        "&:nth-last-child(-n+5)": {
-          borderBottom: "none",
         },
-      },
-      "& .table-view-row-header": {
-        padding: "12px",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "flex-start",
-        color: "#2F2F2F",
-        borderBottom: "1px solid #e6e6e6",
-        fontWeight: 600,
-      },
-    },
-  },
-  headerSection: {
-    display: "grid",
-    gridTemplateColumns: "480px 1fr",
-    alignItems: "center",
-    '& .search-wrapper': {
-      '& .wrapper-for-search': {
-        border: '1px solid #e6e6e6',
-      }
-    }
-  },
-}))
-
-const VmGroupsListing = (props) => {
-  const classes = useStyles();
-  const [state, setState] = useState({
-    loading: true,
-    all_templates: [],
-    total_page: "",
-    curr_page: "",
-    filtered: false,
-    moreAdvFilterList: [],
-    advFilters: {
-      env: [],
-      name: [],
-    },
-    resetCount: 0,
-    is_filters_applied: false,
-    openDialog: false,
-  });
-  const defaultFilters = ["virtual_group_name", "environment_master_type"];
-  const history = useNavigate();
-  const moreFilterData = [
-    { label: "Restricted Envs", value: "environment_master_type" },
-    { label: "Name", value: "virtual_group_name" },
-  ];
-
-  const resetFilterData = {
-    name: [],
-    env: [],
-  };
-  useEffect(() => {
-    resetAdvFilter();
-  }, []);
-
-  useEffect(() => {
-    isFiltersApplied();
-  }, [state.advFilters]);
-
-  function isFiltersApplied() {
-    let count = 0;
-    Object.keys(state.advFilters).forEach((item) => {
-      if (state.advFilters[item].length > 0) {
-        count = count + 1;
-      }
+        history_status: "SUCCESS",
+        showLoadingIcon: false,
+        history_list: [],
+        error: false,
+        selected_tab: 1,
+        logs: "",
+        task_id: "",
+        infiniteScrollInherits: {},
+        endPoint: GenerateURL({ service_id: props.service_id, env_id: props.env_id }, properties.api.env_build_request_url)
     });
-
-    setState((new_state) => ({
-      ...new_state,
-      is_filters_applied: count > 0,
-    }));
-  }
-
-  useEffect(() => {
-    const urlSearchParams = new URLSearchParams(location.search);
-    if (urlSearchParams.size != 0) {
-      let moreAdvFilter = defaultFilters;
-      let advFilters = {};
-      urlSearchParams?.forEach((value, key) => {
-        if (value) {
-          if (key == "adv_search") {
-            let advValue = value;
-            let updatedList = advValue.split(",");
-            updatedList = [...moreAdvFilter, ...updatedList];
-            moreAdvFilter = [...new Set(updatedList)];
-          } else {
-            let filterValue = value;
-            const updatedList = filterValue.split(",");
-            advFilters[key] = updatedList;
-          }
+    let timer = null;
+    const triggerBuildDeploy = props.triggerBuildDeploy;
+    const task_id = props.task_id;
+    const type = props.type;
+    const hintText = props.hintText ? props.hintText : "Click on finish to complete the Setup";
+    const btnLabel = props.btnLabel ? props.btnLabel : null;
+    const skipButtonRequired = props.skipButtonRequired ? props.skipButtonRequired : false;
+    const handleClickToSkip = props.handleClickToSkip ? props.handleClickToSkip : () => { }
+    const [showProgressBar, setShowProgressBar] = useState(true);
+    const { showSnackbar } = useCustomSnackbar();
+    const closeClick = props.closeClick || null;
+    console.log("propsmdskm", props);
+    React.useEffect(() => {
+        if (task_id) {
+            fetchActivityStatus();
         }
-      });
-      setState((prevState) => ({
-        ...prevState,
-        moreAdvFilterList: moreAdvFilter,
-        advFilters: { ...advFilters },
-      }));
-      fetchAllVMGroups(advFilters, moreAdvFilter);
-    }
-  }, []);
+        return () => clearTimeout(timer);
+    }, [task_id]);
 
-  function fetchAllVMGroups(data, url) {
-    var requestInfo = {
-      endPoint: GenerateURL({}, properties.api.create_vm_group),
-      httpMethod: "GET",
-      httpHeaders: { "Content-Type": "application/json" },
-    };
 
-    if (data) {
-      requestInfo.endPoint = GenerateSearchURL(data, requestInfo.endPoint);
-    }
+    React.useEffect(() => {
+        fetchActivitiesInfo();
+    }, [])
 
-    if (url) {
-      requestInfo.endPoint = url;
-    }
+    React.useEffect(() => {
+        getTriggeredService();
+    }, [state.activity_list])
 
-    InvokeApi(
-      requestInfo,
-      fetchAllVMGroupsDataSuccess,
-      fetchAllVMGroupsDataFailed
-    );
-
-    setState((new_state) => ({
-      ...new_state,
-      loading: true,
-    }));
-  }
-  function fetchAllVMGroupsDataSuccess(data) {
-    setState((new_state) => ({
-      ...new_state,
-      all_templates: [], 
-      all_templates: data.results,
-      loading: false,
-      count: data.count,
-      next: data.next ? properties.api.baseURL + data.next : null,
-      previous: data.previous ? properties.api.baseURL + data.previous : null,
-      total_page: Math.ceil(Number(data.count / 10)),
-      curr_page: 1,
-    }));
-  }
-
-  function fetchAllVMGroupsDataFailed(error, statusCode) {
-    setState((new_state) => ({
-      ...new_state,
-      error: error,
-      loading: false,
-      statusCode: statusCode,
-    }));
-  }
-
-  function fetchNextInfo(data, url) {
-    var requestInfo = {
-      endPoint: GenerateURL({}, properties.api.create_vm_group),
-      httpMethod: "GET",
-      httpHeaders: { "Content-Type": "application/json" },
-    };
-
-    if (data) {
-      requestInfo.endPoint = GenerateSearchURL(data, requestInfo.endPoint);
-    }
-
-    if (url) {
-      requestInfo.endPoint = url;
-    }
-
-    setState((prevState) => ({
-      ...prevState,
-      loading: true,
-    }));
-
-    InvokeApi(
-      requestInfo,
-      handleWorkflowNextDataSuccessApiHit,
-      fetchAllVMGroupsDataFailed
-    );
-  }
-  function handleWorkflowNextDataSuccessApiHit(data) {
-    console.log("res success", data);
-    setState((new_state) => ({
-      ...new_state,
-      all_templates: data.results,
-      count: data.count,
-      next: data.next ? properties.api.baseURL + data.next : null,
-      previous: data.previous ? properties.api.baseURL + data.previous : null,
-      page_start: state.page_start + data.results.length,
-      total_page: Math.ceil(Number(data.count / 10)),
-      curr_page: Number(new_state.curr_page + 1),
-      loading: false,
-    }));
-  }
-
-  //prev function
-
-  function fetchPrevInfo(data, url) {
-    var requestInfo = {
-      endPoint: GenerateURL({}, properties.api.create_vm_group),
-      httpMethod: "GET",
-      httpHeaders: { "Content-Type": "application/json" },
-    };
-
-    if (data) {
-      requestInfo.endPoint = GenerateSearchURL(data, requestInfo.endPoint);
-    }
-
-    if (url) {
-      requestInfo.endPoint = url;
-    }
-
-    setState((prevState) => ({
-      ...prevState,
-      loading: true,
-    }));
-    InvokeApi(
-      requestInfo,
-      handleWorkflowPrevDataSuccessApiHit,
-      fetchAllVMGroupsDataFailed
-    );
-  }
-
-  function handleWorkflowPrevDataSuccessApiHit(data) {
-    console.log("res success", data);
-    setState((new_state) => ({
-      ...new_state,
-      all_templates: data.results,
-      count: data.count,
-      next: data.next ? properties.api.baseURL + data.next : null,
-      previous: data.previous ? properties.api.baseURL + data.previous : null,
-      page_start: state.page_start - data.results.length,
-      total_page: Math.ceil(Number(data.count / 10)),
-      curr_page: Number(new_state.curr_page - 1),
-      loading: false,
-    }));
-  }
-
-  function fetchPageInfo(enteredPageNumber) {
-    var requestInfo = {
-      endPoint: GenerateURL({}, properties.api.create_vm_group),
-      httpMethod: "GET",
-      httpHeaders: { "Content-Type": "application/json" },
-    };
-
-    if (enteredPageNumber > 1) {
-      requestInfo.endPoint =
-        requestInfo.endPoint +
-        "?limit=10&offset=" +
-        (enteredPageNumber - 1) * 10;
-    }
-
-    var current_page = enteredPageNumber;
-    setState((prevState) => ({
-      ...prevState,
-      loading: true,
-    }));
-    InvokeApi(
-      requestInfo,
-      (response) => {
-        handleWorkflowPageDataSuccessApiHit(response, current_page);
-      },
-      fetchAllVMGroupsDataFailed
-    );
-  }
-  function handleWorkflowPageDataSuccessApiHit(data, count) {
-    setState((new_state) => ({
-      ...new_state,
-      all_templates: data.results,
-      count: data.count,
-      next: data.next ? properties.api.baseURL + data.next : null,
-      previous: data.previous ? properties.api.baseURL + data.previous : null,
-      page_start: state.page_start + data.results.length,
-      total_page: Math.ceil(Number(data.count / 10)),
-      curr_page: Number(count),
-      loading: false,
-    }));
-  }
-
-  function generateFilterContainURL(baseURL, listDict, activeFilters) {
-    var searchParams = "";
-    const filtersKeyArray = Object.keys(listDict);
-    let i = 0;
-    const activeFilterList = activeFilters || state.moreAdvFilterList;
-    filtersKeyArray.forEach((key) => {
-      const arrayFilterValues = listDict[key];
-      if (
-        arrayFilterValues.length > 0 &&
-        isFilterActive(key, activeFilterList)
-      ) {
-        if (i != 0) {
-          searchParams += "&";
-        }
-        var arrayString = arrayFilterValues;
-        const stringKey = `${key}=${arrayString}`;
-        searchParams += stringKey;
-        i++;
-      }
-    });
-
-    const finalUrl = baseURL + "?" + searchParams.toString();
-
-    return finalUrl;
-  }
-
-  const onUpdateHandle = (uniqueId, updatedList) => {
-    let updatedKey = "";
-    if (uniqueId === "more-button-adv-0") {
-      addFiltersToUrl("adv_search", updatedList);
-      if (updatedList?.length == 0) {
-        resetAdvFilter();
-      } else {
-        setState((prevState) => ({
-          ...prevState,
-          moreAdvFilterList: updatedList,
-        }));
-      }
-    } else {
-      if (uniqueId == "name_adv_1") {
-        updatedKey = "virtual_group_name";
-      }
-      if (uniqueId == "env_id_adv_2") {
-        updatedKey = "environment_master_type";
-      }
-
-      const normalizedValues = updatedList.map(item =>
-        typeof item === "object" ? item.value : item
-      );
-
-      setState((prevState) => ({
-        ...prevState,
-        advFilters: {
-          ...prevState.advFilters,
-          [updatedKey]: normalizedValues,
-        },
-      }));
-      addFiltersToUrl(updatedKey, normalizedValues);
-      const advFilters = state.advFilters;
-      advFilters[updatedKey] = normalizedValues;
-      fetchAllVMGroups(advFilters);
-    }
-  };
-
-  const resetAdvFilter = () => {
-    fetchAllVMGroups(resetFilterData);
-    addFiltersToUrl("all_delete");
-    setState((prevState) => ({
-      ...prevState,
-      moreAdvFilterList: defaultFilters,
-      advFilters: resetFilterData,
-      resetCount: prevState.resetCount + 1,
-    }));
-
-    // will call here normal function
-  };
-
-  const addFiltersToUrl = (filterName, filterValue) => {
-    let urlSearchParams = new URLSearchParams(location.search);
-    const allFilters = ["Name", "env"];
-
-    if (filterName == "all_delete") {
-      urlSearchParams = "";
-    } else {
-      if (filterName == "adv_search") {
-        allFilters.forEach((value) => {
-          if (!filterValue.includes(value)) {
-            urlSearchParams.delete(value);
-          }
+    function getTriggeredService() {
+        let selected_service;
+        state.activity_list?.forEach(element => {
+            if (element.activity_token == task_id) {
+                selected_service = element;
+            }
         });
-      }
 
-      if (filterValue?.length == 0) {
-        urlSearchParams.delete(filterName);
-      } else {
-        if (urlSearchParams.has(filterName)) {
-          urlSearchParams.set(filterName, filterValue.join(","));
-        } else {
-          urlSearchParams.append(filterName, filterValue.join(","));
-        }
-      }
+        setState((new_state) => ({
+            ...new_state,
+            triggered_service: selected_service
+        }))
+
+        console.log(selected_service, "sjvcxdzgcvsdjcvgds")
     }
 
-    history({
-      pathname: location.pathname,
-      search: urlSearchParams.toString(),
-    });
-  };
+    function fetchActivitiesInfo(data, url) {
 
-  function filterDataParseForVMName(data) {
-    const updatedList = data?.map((item) => {
-      return {
-        label: item.virtual_group_name,
-        value: item.virtual_group_name,
-        ...item,
-      };
-    });
-    console.log("filtered list :", updatedList)
-    return updatedList;
-  }
-
-  function filterDataParseForVMEnvs(data) {
-    const envMap = new Map();
-
-    data?.forEach((item) => {
-      item.env_obj?.forEach((env) => {
-        if (!envMap.has(env.id)) {
-          envMap.set(env.id, {
-            label: env.name.toUpperCase(),
-            value: env.id,
-          });
+        let requestInfo = {
+            endPoint: GenerateURL({}, properties.api.get_activities_details),
+            httpMethod: "GET",
+            httpHeaders: { "Content-Type": "application/json" }
         }
-      });
-    });
+        if (data) {
+            requestInfo.endPoint = GenerateSearchURL(data, requestInfo.endPoint);
+        }
+        if (url) {
+            requestInfo.endPoint = url;
+        }
+        setState(new_state => ({
+            ...new_state,
+            search_data: data,
+            current: requestInfo.endPoint,
+        }));
+        InvokeApi(requestInfo, ActivityInfoFetchSuccess, ActivityInfoFetchFailure);
+    }
 
-    return Array.from(envMap.values());
-  }
+    function ActivityInfoFetchSuccess(response) {
+        console.log(response, "+++++>>>")
+        setState(new_state => ({
+            ...new_state,
+            activity_list: response.results,
+            activity_id: response.id,
+            count: response.count,
+            next: response.next,
+            previous: response.previous,
+        }));
+    }
+
+    function ActivityInfoFetchFailure(error, exception) {
+        setState(new_state => ({
+            ...new_state,
+            error: true
+        }));
+    }
 
 
-  const getEnvChipVariant = (envName) => {
-    if (!envName) return 'light';
+    console.log("aaaaaaa", task_id)
+    function fetchActivityStatus() {
+        let url_temp = GenerateURL({}, properties.api.project_status);
+        console.log("props", props)
+        let requestInfo = {
+            endPoint: GenerateSearchURL({ task_id: task_id }, url_temp),
+            httpMethod: "GET",
+            httpHeaders: { "Content-Type": "application/json" }
+        }
 
-    const env = envName.toLowerCase().trim();
+        InvokeApi(requestInfo, onStatusFetchSuccess, onStatusFetchFail)
+    }
 
-    const variantMap = {
-      'dev': 'info',
-      'development': 'info',
-      'prod': 'highlight',
-      'production': 'highlight',
-      'uat': 'warning',
-      'qa': 'success',
-      'quality': 'success',
-      'staging': 'error',
-      'stage': 'error',
+    function onStatusFetchSuccess(response) {
+        console.log("response_status-djis", response);
+        const all_activities = properties.activities;
+        const activityName = response?.activity_master?.activity_name;
+        const activityCode = response.activity_master.code.toLowerCase();
+        const activityObj = all_activities[activityCode];
+        const description = 'View logs for more details';
+        if (response.status === "FAILED") {
+            showSnackbar('error', `Task failed for activity: ${activityName}`, "View logs for detailed failure");
+        } else if (response.status === "SUCCESS") {
+            showSnackbar('success', `Task completed for activity: ${activityName}`);
+        }
+
+
+        setState(new_state => ({
+            ...new_state,
+            response: response,
+            loaded: false,
+            activity_master: response.activity_master,
+            sub_task_status: response.sub_task_status,
+            status: response.status,
+            description: response.description,
+            activity_obj: activityObj
+        })
+        )
+        timer = setTimeout(() => {
+            if (response.status == "RUNNING" || response.status == "IN_QUEUE") {
+                fetchActivityStatus();
+            }
+            else {
+                setShowProgressBar(false);
+            }
+
+            // if(viewLogs){
+            //     fetchLogs();
+            // }
+        }, 2000)
+
+    }
+
+    console.log(state, "sbvnxdvxnvxnvnbf")
+
+    function onStatusFetchFail(response) {
+        let error_msg = showErrorHandlerUpdated(response)
+        showSnackbar('error', 'Task has failed.', error_msg)
+        setState(new_state => ({
+            ...new_state,
+            error: error_msg
+        })
+        )
+    }
+    const handleRefresh = () => {
+        // by calling this method react re-renders the component
+
+        props.refresh();
+        //window.location.reload(false);
     };
-
-    return variantMap[env] || 'light';
-  };
-
-  const advanceFilterJson = {
-    virtual_group_name: {
-      staticList: false,
-      labelName: "Name",
-      uniqueId: "name_adv_1",
-      searchVariable: "virtual_group_name",
-      getFetchUrl: properties.api.create_vm_group,
-      searchUrl: properties.api.create_vm_group,
-      filterDataPraseFunction: filterDataParseForVMName,
-    },
-    // 'tag': {
-    //     staticList: false,
-    //     labelName: 'Tag',
-    //     uniqueId: 'tag_adv_3',
-    //     searchVariable: 'tag',
-    //     getFetchUrl: properties.api.create_vm_group,
-    //     searchUrl: properties.api.create_vm_group,
-    //     filterDataPraseFunction: filterDataParseForVMTags,
-    //     showMoreNotRequired: true
-    // },
-    environment_master_type: {
-      staticList: false,
-      uniqueId: "env_id_adv_2",
-      labelName: "env",
-      searchVariable: "environment_master_type",
-      getFetchUrl: properties.api.create_vm_group,
-      searchUrl: properties.api.create_vm_group,
-      filterDataPraseFunction: filterDataParseForVMEnvs,
-      // showMoreNotRequired: true,
-    },
-  };
-  const handleOpenDialog = (editItem = null) => {
-    setState((prevState) => ({
-      ...prevState,
-      openDialog: true,
-      editData: editItem,
-    }));
-  };
-  const handleCloseDialog = () => {
-    setState((prevState) => ({
-      ...prevState,
-      openDialog: false,
-      editData: null,
-    }));
-  };
-  const handleDialogSuccess = (response) => {
-    fetchAllVMGroups(state.advFilters);
-  };
-  return (
-    <div className={classes.root}>
-      {state.loading ? (
-        <>
-          <div className="table-view mb-20 mt-20">
-            <div className="table-view-row-header">Virtual Machine Set</div>
-            <div className="table-view-row-header">Mapped Envs</div>
-            <div className="table-view-row-header">VMs Connected</div>
-            <div className="table-view-row-header">Last Edited</div>
-            <div className="table-view-row-header"></div>
-            <>
-              {Array.from({ length: 10 }).map((item) => {
-                return <SkeletonRow />;
-              })}
-            </>
-          </div>
-        </>
-      ) : state.error ? (
-        <PageError error={state.error} statusCode={state?.statusCode} />
-      ) : state.all_templates.length > 0 ? (
-        <div>
-          <div className={classes.headerSection}>
-            <PageHeader
-              heading="Virtual Machine Group"
-              subHeading="Displaying all connected and disconnected virtual machines groups."
-              icon="ri-cpu-line"
-              primaryButton={null}
-              commonDivMargin={false}
-            />
-
-            <div
-              className="d-grid"
-              style={{
-                gridTemplateColumns: "320px 160px",
-                gap: "10px",
-                justifyContent: "end",
-              }}
-            >
-              <div className="search-wrapper"></div>
-
-              <button
-                onClick={() => handleOpenDialog()}
-                className="btn btn-primary mr-0"
-                style={{ marginRight: 0 }}
-              >
-                <span className="ri-add-line width-24px height-24px"></span>
-                &nbsp;Add VM Group
-              </button>
-            </div>
-            {state.count != 0 ? (
-              <div
-                style={{
-                  display: "grid",
-                  marginBottom: "12px",
-                  width: "100%",
-                  marginTop: "34px",
-
-                }}
-              >
-                <Grid container alignItems="center" wrap="nowrap" >
-                  {state.moreAdvFilterList?.map((filterName) => {
-                    return (
-                      <div key={filterName} className="ad-more-search" style={{ whiteSpace: "nowrap" }}>
-                        <AdvanceSearchFilterCombo
-                          reset={state.resetCount}
-                          selectedCheckBoxes={state.advFilters[filterName]}
-                          searchVariable={
-                            advanceFilterJson[filterName]["searchVariable"]
-                          }
-                          staticList={
-                            advanceFilterJson[filterName]["staticList"]
-                          }
-                          uniqueId={advanceFilterJson[filterName]["uniqueId"]}
-                          labelName={
-                            advanceFilterJson[filterName]["labelName"]
-                          }
-                          searchUrl={
-                            advanceFilterJson[filterName]["searchUrl"]
-                          }
-                          onUpdate={onUpdateHandle}
-                          getFetchUrl={
-                            advanceFilterJson[filterName]["getFetchUrl"]
-                          }
-                          placeholder_name={
-                            advanceFilterJson[filterName]["placeholder_name"]
-                          }
-                          placeholder_value={
-                            advanceFilterJson[filterName]["placeholder_value"]
-                          }
-                          filterDataPraseFunction={
-                            advanceFilterJson[filterName][
-                            "filterDataPraseFunction"
-                            ]
-                          }
-                          showMoreNotRequired={
-                            advanceFilterJson[filterName][
-                            "showMoreNotRequired"
-                            ]
-                          }
-                        />
-                      </div>
-                    );
-                  })}
-                  <div className="ad-more-search" style={{ whiteSpace: "nowrap" }}>
-                    <AdvanceSearchFilterCombo
-                      selectedCheckBoxes={state.moreAdvFilterList}
-                      reset={state.resetCount}
-                      staticList={moreFilterData}
-                      autoClosedAfterSelection={true}
-                      onUpdate={onUpdateHandle}
-                      variant="more-button"
-                      uniqueId="more-button-adv-0"
-                    />
-                  </div>
-
-                  <div
-                    onKeyDown={() => { }}
-                    onClick={resetAdvFilter}
-                    className="pl-15 ml-20 d-flex align-center justify-center cursor-pointer"
-                    style={{
-                      borderLeft: "1px solid #dedede",
-                      height: "40px",
-                      flexShrink: 0
-                    }}
-                    tabIndex={0}
-                    role="button"
-                  >
-                    <span
-                      style={{ color: "#595353" }}
-                      className="font-13 cursor-pointer"
-                    >
-                      Reset
-                    </span>
-                  </div>
-                </Grid>
-              </div>
-            ) : null}
-          </div>
-
-          <div className="table-view mb-20 mt-20">
-            <div className="table-view-row-header">Virtual Machine Set</div>
-            <div className="table-view-row-header">Mapped Envs</div>
-            <div className="table-view-row-header">VMs Connected</div>
-            <div className="table-view-row-header">Last Edited</div>
-            <div className="table-view-row-header"></div>
-            {state.all_templates.map((item) => {
-              return (
-                <>
-                  <div className="table-view-row gap-12px">
-                    <SquareAvatar
-                      varient="double"
-                      shape="sm-box"
-                      name={item.virtual_group_name}
-                    />{" "}
-                    &nbsp;&nbsp;
-                    <Tooltip
-                      title={item.virtual_group_name}
-                      arrow
-                      placement="top"
-                    >
-                      <Link
-                        to={`/vm-group/${item.id}/vm/list`}
-                        className="text-anchor-blue"
-                        style={{
-                          maxWidth: "180px",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                          display: "inline-block",
-                        }}
-                      >
-                        {item.virtual_group_name}
-                      </Link>
-                    </Tooltip>
-                  </div>
-                  <div
-                    className="table-view-row "
-                    style={{ gap: "6px", flexWrap: "wrap" }}
-                  >
-                    {item.env_obj.slice(0, 2).map((env) => {
-                      return (
-                        <>
-                          <NewChip
-                            label={env.name.toUpperCase()}
-                            variant={getEnvChipVariant(env.name)}
-                            size="md"
-                            shape="standard"
-                          />
-                        </>
-                      );
-                    })}
-                    {item.env_obj.length > 2 && (
-                      <Tooltip
-                        title={
-                          <div
-                            style={{
-                              display: 'flex',
-                              flexWrap: 'wrap',
-                              justifyContent: 'center',
-                              alignItems: 'center',
-                              gap: '6px',
-                              padding: '4px',
-                              maxWidth: '300px',
-                            }}
-                          >
-                            {item.env_obj.slice(2).map((env) => (
-                              <NewChip
-                                key={env.id}
-                                label={env.name.toUpperCase()}
-                                variant={getEnvChipVariant(env.name)}
-                                size="md"
-                                shape="standard"
-                              />
-                            ))}
-                          </div>
-                        }
-                        arrow
-                        placement="top"
-                        componentsProps={{
-                          tooltip: {
-                            sx: {
-                              bgcolor: '#FFFFFF !important',
-                              backgroundColor: '#FFFFFF !important',
-                              // border: '1px solid #E6E6E6 !important',
-                              boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.1) !important',
-                              borderRadius: '8px !important',
-                              maxWidth: '400px !important',
-                              padding: '4px !important',
-                            },
-                          },
-                          arrow: {
-                            sx: {
-                              color: '#FFFFFF !important',
-                              '&::before': {
-                                // border: '1px solid #E6E6E6 !important',
-                                backgroundColor: '#FFFFFF !important',
-                                boxSizing: 'border-box',
-                              },
-                            },
-                          },
-                          popper: {
-                            sx: {
-                              '& .MuiTooltip-tooltip': {
-                                bgcolor: '#FFFFFF !important',
-                                backgroundColor: '#FFFFFF !important',
-                                // border: '1px solid #E6E6E6 !important',
-                                boxShadow: '0px 4px 12px rgba(0, 0, 0, 0.1) !important',
-                              },
-                              '& .MuiTooltip-arrow': {
-                                color: '#FFFFFF !important',
-                                '&::before': {
-                                  // border: '1px solid #E6E6E6 !important',
-                                  backgroundColor: '#FFFFFF !important',
-                                },
-                              },
-                            },
-                          },
-                        }}
-                      >
-                        <span style={{ cursor: 'pointer' }}>
-                          <NewChip
-                            label={`+${item.env_obj.length - 2}`}
-                            shape="standard"
-                            size="md"
-                          />
-                        </span>
-                      </Tooltip>
-
-                    )}
-                  </div>
-                  <div className="table-view-row font-weight-500">
-                    {item.virtual_machines && item.virtual_machines.length > 0
-                      ? `${item.virtual_machines.filter(
-                        (vm) => vm.status === "ONLINE"
-                      ).length
-                      } / ${item.virtual_machines.length}`
-                      : "N/A"}
-                  </div>
-                  <div className="table-view-row font-weight-500">
-                    {item.updated_at
-                      ? moment(item.updated_at).fromNow()
-                      : moment().fromNow()}
-                  </div>
-                  <div
-                    className="table-view-row"
-                    style={{ justifySelf: "end", width: "100%" }}
-                  >
-                    <PopoverDropdown
-                      name={item.virtual_group_name}
-                      id={item.id}
-                      handleRefresh={fetchAllVMGroups}
-                      handleEdit={() => handleOpenDialog(item)}
-                    />
-                  </div>
-                </>
-              );
-            })}
-          </div>
-          <PaginationTwo
-            current_page_count={state.curr_page}
-            total_count={state.total_page}
-            next={state.next}
-            count={state.count}
-            previous={state.previous}
-            on_previous_click={() => {
-              fetchPrevInfo(null, state.previous);
-            }}
-            on_next_click={() => {
-              fetchNextInfo(null, state.next);
-            }}
-            on_pageNumber_click={(pageNumber) => {
-              fetchPageInfo(pageNumber);
-            }}
-          />
-        </div>
-      ) : (
-       <div>
-    <div className={classes.headerSection}>
-      <PageHeader
-        heading="Virtual Machine Group"
-        subHeading="Displaying all connected and disconnected virtual machines groups."
-        icon="ri-cpu-line"
-        primaryButton={null}
-        commonDivMargin={false}
-      />
-
-      <div
-        className="d-grid"
-        style={{
-          gridTemplateColumns: "320px 160px",
-          gap: "10px",
-          justifyContent: "end",
-        }}
-      >
-        <div className="search-wrapper"></div>
-
-        <button
-          onClick={() => handleOpenDialog()}
-          className="btn btn-primary mr-0"
-          style={{ marginRight: 0 }}
-        >
-          <span className="ri-add-line width-24px height-24px"></span>
-          &nbsp;Add VM Group
-        </button>
-      </div>
-    </div>
-    <div className="table-view mb-20 mt-20">
-      <div className="table-view-row-header">Virtual Machine Set</div>
-      <div className="table-view-row-header">Mapped Envs</div>
-      <div className="table-view-row-header">VMs Connected</div>
-      <div className="table-view-row-header">Last Edited</div>
-      <div className="table-view-row-header"></div>
-
-      <BlankPage
-        additionalClass="mb-16"
-        text="You have no VM group added"
-        subHeading="Click 'Add VM Group' button above to get started"
-        pageIcon={
-          <span className="ri-cpu-line font-28 color-key-gray"></span>
-        }
-        variant="inside-table"
-        additionalStyles={{
-          padding: "55px 0",
-          textAlign: "center",
-          height: "auto",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          gridColumn: "1 / -1",
-        }}
-        backgroundColor="#F4F4F4"
-      />
-    </div>
-  </div>
-)}
-      <AddVirtualMachineDialog
-        open={state.openDialog}
-        handleClose={handleCloseDialog}
-        handleSuccess={handleDialogSuccess}
-        editData={state.editData}
-      />
-    </div>
-  );
-}
-
-VmGroupsListing.propTypes = {}
-
-export default VmGroupsListing;
-
-
-const PopoverDropdown = ({ name, id, handleRefresh, handleEdit }) => {
-  const classes = useStylesPopover();
-  const [anchorEl, setAnchorEl] = useState(null);
-  const [state, setState] = useState({
-
-  })
-
-  const handleClick = (event) => {
-    setAnchorEl(event.currentTarget);
-  };
-
-  const handleClose = () => {
-    setAnchorEl(null);
-  };
-
-  const open = Boolean(anchorEl);
-
-  return (
-    <>
-      <div className={classes.root} style={open ? { borderColor: "#0086FF" } : {}} >
-        <button className="btn btn-transparent" onClick={handleClick}>
-          <span className='ri-more-2-fill font-20'></span>
-        </button>
-      </div>
-
-      <Popover
-        open={open}
-        anchorEl={anchorEl}
-        onClose={handleClose}
-        anchorOrigin={{
-          vertical: 'bottom',
-          horizontal: 'center',
-        }}
-        transformOrigin={{
-          vertical: 'top',
-          horizontal: 'center',
-        }}
-        PaperProps={{ style: { overflow: 'visible', marginTop: "10px", borderRadius: "6px", } }}
-      >
-        <div className={classes.popover} style={{ width: 'auto' }}>
-          <div className='font-12 cursor-pointer' style={{ padding: '3px 5px' }} onClick={() => { handleEdit && handleEdit(); handleClose(); }}>
-            {/* <Link className="menu-link" to={`/vm-group/${id}/edit`}> */}
-            <span className='ri-edit-line'></span> Edit
-            {/* </Link> */}
-
-          </div>
-          <div style={{ padding: '3px 5px' }}>
-            <Delete
-              varient="new_ui_versioning"
-              display_data_name={name}
-              data={{ entity_id: id, name: "virtual_group_name", label: 'virtual group' }}
-              refresh={handleRefresh}
-              api_link={GenerateURL({ edit_id: id }, properties.api.edit_vm_group)}
-            />
-          </div>
-        </div>
-      </Popover>
-    </>
-
-  )
-}
-
-const useStylesPopover = makeStyles((theme) => ({
-  root: {
-    marginLeft: 'auto'
-
-  },
-  popover: {
-    //width: "100%",
-    display: "flex",
-    padding: '10px 5px',
-    flexDirection: "column",
-    alignItems: "flex-start",
-    gap: "5px",
-    borderRadius: "6px",
-    border: "1px solid #F4F4F4",
-    background: "#FFF",
-    boxShadow: "0px 4px 12px 0px rgba(0, 0, 0, 0.08)",
-    '& .menu-link': {
-      color: '#505050',
-      '&:hover': {
-        color: '#505050',
-      },
-      '&:visited': {
-        color: '#505050',
-      }
+    const success_page = state.activity_obj?.success_page ? GenerateURL(placeholders ? placeholders : {}, state.activity_obj?.success_page, true) : "";
+    //const fail_page = state.activity_obj?.fail_page ? GenerateURL(placeholders ? placeholders : {}, state.activity_obj?.fail_page, true) : "";
+    console.log("success", success_page)
+    function changeTab(newTabId) {
+        setState(new_state => ({
+            ...new_state,
+            selected_tab_id: newTabId
+        }))
     }
-  }
+    function closeLogs() {
+        setState(new_state => ({
+            ...new_state,
+            view_logs: false,
+            logMetadata: {}
+        }))
+    }
+
+    function closeTab(tabId) {
+        let response = state.infiniteScrollInherits.closeTabFunction(tabId, state.logMetadata, closeLogs)
+        if (response) {
+            setState(new_state => ({
+                ...new_state,
+                logMetadata: response.new_tabs_data,
+                selected_tab_id: response.selected_tab_id
+            }))
+        }
+    }
+    console.log("bndjdbns", state);
+    return (
+        type == "new" ?
+            <div className={classes.root}>
+                <div className={newTypeClases.root}>
+                    {
+                        state.error ?
+                            <ErrorComponent error={state.error} /> : null
+                    }
+                    <div className={newTypeClases.cardBody}>
+                        <div className="d-flex justify-end width-full ">
+                            {
+                                props.variant == "SAME_PAGE_REDIRECT" ?
+                                    <div className='mr-20 d-flex align-center width-full space-between ml-20' >
+                                        {state.status == "FAILED" ?
+                                        <button
+                                            className="btn btn-transparent "
+                                            onClick={handleClickToSkip}
+                                        >
+                                            <span className='ri-arrow-left-line mr-5'></span> Back 
+                                        </button>
+        : <div></div>}
+                                        <button
+                                            className="btn btn-transparent "
+                                            onClick={handleClickToSkip}
+                                        >
+                                            SKIP <span className='ri-arrow-right-line ml-5'></span>
+                                        </button>
+                                    </div>
+                                    :
+                                    <Link to={success_page}><button className="btn btn-transparent">
+                                        <span className='ri-close-fill font-20 color-value'></span>
+                                    </button></Link>
+                            }
+
+                        </div>
+                        {
+                            showProgressBar || state.status == "RUNNING" || state.status == "IN_QUEUE" ?
+                                <div className="main-text">
+                                    {state.activity_obj?.header}
+                                </div> : null
+                        }
+
+                        {
+                            showProgressBar || state.status == "RUNNING" || state.status == "IN_QUEUE" ?
+                                <>
+                                    <div className="hint-text">
+                                        Please wait this might take some time..
+                                    </div>
+                                    <div className="linear-progressbar mt-16">
+                                        <LinearProgress variant={showProgressBar || state.status == "RUNNING" || state.status == "IN_QUEUE" ? "indeterminate" : "determinate"} value={progress} />
+                                    </div>
+                                </> :
+
+                                <>
+                                    {
+                                        state.status == "FAILED" ?
+                                            <>
+                                                <div className="main-text">
+                                                    {state.activity_obj?.fail_message}
+                                                </div>
+                                                <Tooltip title={state.description}>
+                                                    <div className="isa_info custom-box-new border-danger" style={{ marginTop: '30px', margin: 'auto', width: "100% !important", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                                        <span className="text-ellipsis-multiline color-E1941D" style={{ overflow: 'hidden', width: "70%" }} >{state.description}</span>
+                                                    </div>
+                                                </Tooltip>
+
+                                            </> : null
+                                    }
+                                    {
+                                        state.status == "SUCCESS" ?
+                                            <>
+                                                <div className="main-text">
+                                                    {state?.activity_obj?.success_message}
+                                                </div>
+                                                <div className="hint-text">
+                                                    {
+                                                        hintText
+                                                    }
+                                                </div>
+                                            </> : null
+                                    }
+                                </>
+                        }
+                        <div className={newTypeClases.contentbox}>
+                            <div className='msg-box'>
+                                {
+                                    state.sub_task_status.map((task, index) => (
+                                        <div className={"msg-div"} style={index == state.sub_task_status.length - 1 ? { borderBottom: "none" } : {}}>
+                                            <div className='d-flex align-center' style={{ gap: "12px" }}>
+                                                <div className={task.status == "SUCCESS" ? "success" : task.status == "FAILED" ? "failed" : "running"}>
+                                                    {task.status == "SUCCESS" ? <span className="ri-check-fill font-16"></span>
+                                                        : null}
+                                                    {task.status == "FAILED" ? <span className="ri-error-warning-line color-E1941D font-16"></span>
+                                                        : null}
+                                                    {task.status == "RUNNING" || task.status == "IN_QUEUE" ? <span className="ri-settings-3-line font-16"></span>
+                                                        : null}
+                                                </div>
+                                                <Tooltip title={task.activity_sub_task} TransitionComponent={Zoom}>
+                                                    <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{task.activity_sub_task}</span>
+                                                </Tooltip>
+
+                                            </div>
+                                            <div className="d-flex align-center" style={{ gap: '10px' }}>
+                                                {
+                                                    task.payload_json && task.payload_json.task_id ?
+
+                                                        <Link to={"/logs?global_task_id=" + task.payload_json.task_id} target="_blank" className="mr-5 btn-link d-flex align-center">
+                                                            <i class="ri-eye-line"></i>
+                                                            <span>View Logs</span>
+                                                        </Link>
+                                                        : null
+                                                }
+                                                {task.status == "SUCCESS" ? <span className="color-success font-12 font-weight-600">Success</span>
+                                                    : null}
+                                                {task.status == "FAILED" ? <span className="color-danger font-12 font-weight-600">Failed</span>
+                                                    : null}
+                                                {task.status == "RUNNING" || task.status == "IN_QUEUE" ? <RunningDotsComponent isFromEventSidePannel={true} />
+                                                    : null}
+                                            </div>
+                                        </div>
+                                    ))
+                                }
+                            </div>
+                        </div>
+
+
+                    </div>
+                    {showProgressBar ?
+                        <div className={newTypeClases.cardFooter}>
+                            <div className="footer-left">
+                                {/* <div className="btn-section d-flex align-center"> */}
+                                {
+                                    skipButtonRequired ?
+                                        <button className='btn btn-outline-primary' onClick={handleClickToSkip}>Skip</button> : null
+                                }
+                            </div>
+                            <div className="footer-right">
+                                <a href={"/logs?global_task_id=" + task_id + "&num=" + state.triggered_service?.id + "&service_name=" + state.triggered_service?.entity_detail?.component?.name + "&service_env=" + state.triggered_service?.entity_detail?.component_env?.name} target="_blank" className="view-log-btn font-12 avtar">View Logs</a>
+                            </div>
+                        </div>
+                        :
+                        <>
+                            {state.status == "SUCCESS" ? (
+                                <div className={newTypeClases.cardFooter}>
+
+                                    {props.variant == "SAME_PAGE_REDIRECT" ? (
+                                        <>
+                                        <a href={"/logs?global_task_id=" + task_id + "&num=" + state.triggered_service?.id + "&service_name=" + state.triggered_service?.entity_detail?.component?.name + "&service_env=" + state.triggered_service?.entity_detail?.component_env?.name} target="_blank" className="view-log-btn font-12 avtar">View Logs</a>
+
+                                            {/* <div className="footer-left"></div> */}
+                                            <div className="footer-right">
+                                               
+
+                                                <button className="btn btn-primary avtar font-weight-600" style={{ height: "40px" }} onClick={handleRefresh}>{btnLabel ? btnLabel : "CONTINUE"}</button>
+                                            </div>
+                                        </>
+                                    ) :
+                                        props.variant === "cluster_onboarding" ? (
+                                            <>
+                                                <div className="footer-left"></div>
+
+                                                <a href={"/logs?global_task_id=" + task_id + "&num=" + state.triggered_service?.id + "&service_name=" + state.triggered_service?.entity_detail?.component?.name + "&service_env=" + state.triggered_service?.entity_detail?.component_env?.name} target="_blank" className="view-log-btn font-12 avtar">View Logs</a>
+
+
+                                                <Link to={success_page} onClick={() => UpdateClusterDataForNavigation()}> <button className="btn btn-primary font-weight-600 avtar" style={{ height: "40px" }}>{btnLabel ? btnLabel : "Finish Setup"}</button></Link>
+                                            </>
+                                        )
+                                            : (
+                                                <>
+                                                    <div className="footer-left"></div>
+
+                                                    <a href={"/logs?global_task_id=" + task_id + "&num=" + state.triggered_service?.id + "&service_name=" + state.triggered_service?.entity_detail?.component?.name + "&service_env=" + state.triggered_service?.entity_detail?.component_env?.name} target="_blank" className="view-log-btn font-12 avtar">View Logs</a>
+
+                                                    <Link to={success_page}> <button className="btn btn-primary font-weight-600 avtar" style={{ height: "40px" }}>{btnLabel ? btnLabel : "Finish Setup"}</button></Link>
+                                                </>
+                                            )}
+                                </div>) : null
+                            }
+                            {state.status == "FAILED" ?
+                                <div className={newTypeClases.cardFooter}>
+                                    <a href={"/logs?global_task_id=" + task_id + "&num=" + state.triggered_service?.id + "&service_name=" + state.triggered_service?.entity_detail?.component?.name + "&service_env=" + state.triggered_service?.entity_detail?.component_env?.name} target="_blank" className="view-log-btn font-12 avtar font-weight-600">View Logs</a>
+                                    <div className="footer-right">
+                                        <div className="d-flex" style={{ gap: "12px" }}>
+                                          
+                                            {
+                                                props.variant == "cluster_onboarding" ?
+                                                    <button className="re-configure-btn font-12  font-weight-500 avtar" onClick={handleRefresh}>Re-configure</button>
+                                                    :
+                                                    <button onClick={handleRefresh} className="btn btn-primary retry-btn font-12 font-weight-500 avtar">Retry</button>
+
+                                            }
+                                        </div>
+                                        {state.sub_task_status[2]?.status === "FAILED" ?
+
+                                            <Link
+                                                to={{
+                                                    pathname: "/cluster-permissions",
+                                                    state: {
+                                                        cluster_id: state.triggered_service ? state.triggered_service.entity_id : null,
+                                                        task_id: task_id,
+                                                    },
+                                                }}
+                                            >
+                                                <button className="view-permisson-btn font-12 avtar">
+                                                    <span className="font-weight-600">View Permission</span>
+                                                </button>
+                                            </Link>
+                                            : null
+                                        }
+                                    </div>
+
+                                </div> : null
+                            }
+
+                        </>
+                    }
+                    {/* {state.view_logs ? <ViewLogsInfiniteScroll1 selected_tab_id={state.selected_tab_id} closeLogs={closeLogs} closeTab={closeTab} changeTab={changeTab} tabsData={state.logMetadata} childInherits={state.infiniteScrollInherits} /> : null} */}
+
+
+                </div>
+            </div>
+            :
+            type == "config-db-changes" ?
+                <div className={classes.root}>
+                    <div className={configDbChanges.root}>
+                        {
+                            state.error ?
+                                <ErrorComponent error={state.error} /> : null
+                        }
+
+
+                        <div className={configDbChanges.cardBody}>
+                            <div className="d-flex justify-end width-full">
+                                {
+                                    props.variant == "SAME_PAGE_REDIRECT" ?
+                                        <button className="btn btn-transparent" onClick={handleRefresh}>
+                                            
+                                            <span className='ri-close-fill font-20 color-value'></span>
+                                        </button>
+                                        :
+                                        closeClick ?
+                                            <button className="btn btn-transparent" onClick={closeClick}>
+                                               
+                                                <span className='ri-close-fill font-20 color-value'></span>
+                                            </button>
+                                            :
+                                            <Link to={success_page}>  <button className="btn btn-transparent">
+                                                <span className='ri-close-fill font-20 color-value'></span>
+                                            </button></Link>
+                                }
+
+                            </div>
+
+
+                            {
+                                showProgressBar || state.status == "RUNNING" || state.status == "IN_QUEUE" ?
+                                    <div className="main-text">
+                                        {state.activity_obj?.header}
+                                    </div> : null
+                            }
+
+                            {
+                                showProgressBar || state.status == "RUNNING" || state.status == "IN_QUEUE" ?
+                                    <>
+                                        <div className="hint-text">
+                                            Validating Changes for deployment
+                                        </div>
+                                        <div className="linear-progressbar mt-16">
+                                            <LinearProgress variant={showProgressBar || state.status == "RUNNING" || state.status == "IN_QUEUE" ? "indeterminate" : "determinate"} value={progress} />
+                                        </div>
+                                    </> :
+
+                                    <>
+                                        {
+                                            state.status == "FAILED" ?
+                                                <>
+                                                    <div className="main-text">
+                                                        {state.activity_obj?.fail_message}
+                                                    </div>
+                                                    <Tooltip title={state.description}>
+                                                        <div className="isa_info custom-box-new border-danger" style={{ marginTop: '30px', margin: 'auto', width: "100% !important", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                                            <span className="text-ellipsis-multiline color-E1941D" style={{ overflow: 'hidden', width: "70%" }} >{state.description}</span>
+                                                        </div>
+                                                    </Tooltip>
+
+                                                </> : null
+                                        }
+                                        {
+                                            state.status == "SUCCESS" ?
+                                                <>
+                                                    <div className="main-text">
+                                                        Do you want to approve deployment?
+                                                    </div>
+                                                    <div className="hint-text">
+                                                        Change Detection Completed
+                                                    </div>
+                                                </> : null
+                                        }
+                                    </>
+                            }
+
+
+                            <div className={configDbChanges.contentbox}>
+                                <div className='msg-box'>
+                                    {
+                                        state.sub_task_status.map((task, index) => (
+                                            <div className={"msg-div"} style={index == state.sub_task_status.length - 1 ? { borderBottom: "none" } : {}}>
+                                                <div className='d-flex align-center' style={{ gap: "12px" }}>
+                                                    <div className={task.status == "SUCCESS" ? "success" : task.status == "FAILED" ? "failed" : "running"}>
+                                                        {task.status == "SUCCESS" ? <span className="ri-check-fill font-16"></span>
+                                                            : null}
+                                                        {task.status == "FAILED" ? <span className="ri-error-warning-line color-E1941D font-16"></span>
+                                                            : null}
+                                                        {task.status == "RUNNING" || task.status == "IN_QUEUE" ? <span className="ri-settings-3-line font-16"></span>
+                                                            : null}
+                                                    </div>
+                                                    <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{task.activity_sub_task}</span>
+                                                </div>
+                                                <div className="d-flex align-center" style={{ gap: '10px' }}>
+                                                    {
+                                                        task.payload_json && task.payload_json.task_id ?
+
+                                                            <Link to={"/logs?global_task_id=" + task.payload_json.task_id} target="_blank" className="mr-5 btn-link d-flex align-center">
+                                                                <i class="ri-eye-line"></i>
+                                                                <span>View Logs</span>
+                                                            </Link>
+                                                            : null
+                                                    }
+                                                    {task.status == "SUCCESS" ?
+                                                        task.payload_json.changes_detected ?
+                                                            <span className="color-warning font-12 font-weight-600">CHANGE DETECTED</span>
+                                                            :
+                                                            <span className="color-success font-12 font-weight-600">NO CHANGE DETECTED</span>
+                                                        : null
+                                                    }
+                                                    {task.status == "FAILED" ? <span className="color-danger font-12 font-weight-600">Failed</span>
+                                                        : null}
+                                                    {task.status == "RUNNING" || task.status == "IN_QUEUE" ? <RunningDotsComponent isFromEventSidePannel={true} />
+                                                        : null}
+                                                </div>
+                                            </div>
+                                        ))
+                                    }
+                                </div>
+                            </div>
+
+
+                        </div>
+                        {showProgressBar ?
+                            <div className={configDbChanges.cardFooter}>
+                                <div className="btn-section d-flex align-center">
+                                    {
+                                        skipButtonRequired ?
+                                            <button className='btn btn-outline-primary' onClick={handleClickToSkip}>Skip</button> : null
+                                    }
+                                    <a href={"/logs?global_task_id=" + task_id} target="_blank" className="view-log-btn font-12 avtar">View Logs</a>
+                                </div>
+                            </div>
+                            :
+                            <>
+                                {state.status == "SUCCESS" ?
+                                    <div className={configDbChanges.cardFooter}>
+
+                                        <a href={"/logs?global_task_id=" + task_id} target="_blank" className="view-log-btn font-12 avtar">View Logs</a>
+
+                                        {
+                                            <button className="btn btn-primary avtar font-weight-600" style={{ height: "40px" }} onClick={handleContinueToNextTab}>CONTINUE</button>
+                                            // props.variant == "SAME_PAGE_REDIRECT" ?
+                                            //     <button className="btn btn-primary avtar font-weight-600" style={{ height: "40px" }} onClick={handleRefresh}>{btnLabel ? btnLabel : "Finish Setup"}</button>
+                                            //     :
+                                            //     <Link to={success_page}> <button className="btn btn-primary font-weight-600 avtar" style={{ height: "40px" }}>{btnLabel ? btnLabel : "Finish Setup"}</button></Link>
+                                        }
+
+
+                                    </div> : null
+                                }
+                                {state.status == "FAILED" ?
+                                    <div className={configDbChanges.cardFooter}>
+
+                                        <a href={"/logs?global_task_id=" + task_id} target="_blank" className="view-log-btn font-12 avtar">View Logs</a>
+
+
+                                        {
+                                            <button className="btn btn-primary avtar font-weight-600" style={{ height: "40px" }} onClick={handleContinueToNextTab}>CONTINUE</button>
+                                            // props.variant == "SAME_PAGE_REDIRECT" ?
+                                            //     <button className="btn btn-primary avtar font-weight-600" style={{ height: "40px" }} onClick={handleRefresh}>{btnLabel ? btnLabel : "Finish Setup"}</button>
+                                            //     :
+                                            //     <Link to={success_page}> <button className="btn btn-primary font-weight-600 avtar" style={{ height: "40px" }}>{btnLabel ? btnLabel : "Finish Setup"}</button></Link>
+                                        }
+
+
+                                    </div> : null
+                                }
+                                {state.status == "RUNNING" ?
+                                    <div className={configDbChanges.cardFooter}>
+                                        {
+                                            <button className="btn btn-disable avtar font-weight-600" style={{ height: "40px" }} onClick={() => { }}>CONTINUE</button>
+                                            // props.variant == "SAME_PAGE_REDIRECT" ?
+                                            //     <button className="btn btn-primary avtar font-weight-600" style={{ height: "40px" }} onClick={handleRefresh}>{btnLabel ? btnLabel : "Finish Setup"}</button>
+                                            //     :
+                                            //     <Link to={success_page}> <button className="btn btn-primary font-weight-600 avtar" style={{ height: "40px" }}>{btnLabel ? btnLabel : "Finish Setup"}</button></Link>
+                                        }
+                                    </div> : null
+                                }
+
+                            </>
+                        }
+                        {/* {state.view_logs ? <ViewLogsInfiniteScroll1 selected_tab_id={state.selected_tab_id} closeLogs={closeLogs} closeTab={closeTab} changeTab={changeTab} tabsData={state.logMetadata} childInherits={state.infiniteScrollInherits} /> : null} */}
+
+
+                    </div>
+                </div>
+                :
+                <div className={classes.root + " " + "manual-height"}>
+                    <div className={classes.card}>
+                        {
+                            state.error ?
+                                <ErrorComponent error={state.error} /> : null
+                        }
+
+
+                        <div className={classes.cardBody}>
+                            <div className="d-flex space-between mb-50 mt-20">
+                                {
+                                    state.status == "SUCCESS" ?
+                                        <div></div> :
+                                        <button className="btn btn-transparent" onClick={handleRefresh}>
+                                            <i className="ri-arrow-left-s-line"></i> Back
+                                        </button>
+                                }
+
+                                {
+                                    props.variant == "SAME_PAGE_REDIRECT" ?
+                                        <button className="btn btn-transparent" onClick={handleRefresh}>
+                                            Skip <i className="ri-arrow-right-s-line"></i>
+                                        </button>
+                                        :
+                                        <Link to={success_page}>  <button className="btn btn-transparent">
+                                            Skip <i className="ri-arrow-right-s-line"></i>
+                                        </button></Link>
+                                }
+
+                            </div>
+
+
+                            {
+                                showProgressBar || state.status == "RUNNING" || state.status == "IN_QUEUE" ?
+                                    <div className="main-text">
+                                        {state.activity_obj?.header}
+                                    </div> : null
+                            }
+
+
+                            {
+                                showProgressBar || state.status == "RUNNING" || state.status == "IN_QUEUE" ?
+                                    <>
+                                        <div className="hint-text">
+                                            Please wait this might take some time..
+                                        </div>
+                                        <div className="linear-progressbar mt-20 mb-50">
+                                            <LinearProgress variant={showProgressBar || state.status == "RUNNING" || state.status == "IN_QUEUE" ? "indeterminate" : "determinate"} value={progress} />
+                                        </div>
+                                    </> :
+
+                                    <>
+
+                                        {
+                                            state.status == "FAILED" ?
+                                                <>
+                                                    <div className={classes.mainMsg} style={{ marginTop: '30px' }}>
+                                                        {state.activity_obj.fail_message}
+                                                    </div>
+                                                    <Tooltip title={state.description}>
+                                                        <div className="isa_info custom-box-new border-danger" style={{ marginTop: '30px', margin: 'auto', width: "100% !important", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                                            <span className="text-ellipsis-multiline color-E1941D" style={{ overflow: 'hidden', width: "70%", textAlign: 'center' }} >{state.description}</span>
+                                                        </div>
+                                                    </Tooltip>
+
+                                                </> : null
+                                        }
+                                        {
+                                            state.status == "SUCCESS" ?
+                                                <>
+                                                    <div className={classes.mainMsg} style={{ marginTop: '30px' }}>
+                                                        {state?.activity_obj?.success_message}
+                                                    </div>
+                                                </> : null
+                                        }
+                                    </>
+                            }
+
+
+                            <div className={classes.contentbox}>
+
+                                {
+                                    state.sub_task_status.map(task => (
+                                        <div className="msg-div">
+                                            <div className="icon-circle success">
+                                                {task.status == "SUCCESS" ? <span className="flaticon-check-symbol"></span>
+                                                    : null}
+                                                {task.status == "FAILED" ? <span className=" ri-error-warning-line font-24"></span>
+                                                    : null}
+                                                {task.status == "RUNNING" || task.status == "IN_QUEUE" ? <span className="flaticon-clock-with-white-face"></span>
+                                                    : null}
+                                            </div>
+                                            <Tooltip title={task.activity_sub_task} TransitionComponent={Zoom}>
+                                                <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{task.activity_sub_task}</span>
+                                            </Tooltip>
+                                            <div className="d-flex align-center" style={{ gap: '10px' }}>
+                                                {
+                                                    task.payload_json && task.payload_json.task_id ?
+
+                                                        <Link to={"/logs?global_task_id=" + task.payload_json.task_id} target="_blank" className="mr-5 btn-link d-flex align-center">
+                                                            <i class="ri-eye-line font-14"></i>
+                                                            <span>View Logs</span>
+                                                        </Link>
+                                                        : null
+                                                }
+                                                {task.status == "SUCCESS" ? <span className="color-success">Success</span>
+                                                    : null}
+                                                {task.status == "FAILED" ? <span className="color-danger">Failed</span>
+                                                    : null}
+                                                {task.status == "RUNNING" || task.status == "IN_QUEUE" ? <span className="color-pending">Running</span>
+                                                    : null}
+                                            </div>
+                                        </div>
+                                    ))
+                                }
+
+                            </div>
+
+
+                        </div>
+                        {showProgressBar ?
+                            <div className={classes.cardFooter}>
+                                <div className="btn-section">
+                                    {
+                                        skipButtonRequired ?
+                                            <button className='btn btn-outline-primary' onClick={handleRefresh}>Skip</button> : null
+                                    }
+                                    <a href={"/logs?global_task_id=" + task_id + "&num=" + state.triggered_service?.id + "&service_name=" + state.triggered_service?.entity_detail?.component?.name + "&service_env=" + state.triggered_service?.entity_detail?.component_env?.name} target="_blank" className="btn btn-outline-default">View Logs</a>
+                                </div>
+                            </div>
+                            :
+                            <>
+                                {state.status == "SUCCESS" ?
+                                    <div className={classes.cardFooter}>
+                                        <div className="btn-section">
+
+                                            <a href={"/logs?global_task_id=" + task_id + "&num=" + state.triggered_service?.id + "&service_name=" + state.triggered_service?.entity_detail?.component?.name + "&service_env=" + state.triggered_service?.entity_detail?.component_env?.name} target="_blank" className="btn btn-outline-default">View Logs</a>
+
+
+                                            {
+                                                props.variant == "SAME_PAGE_REDIRECT" ?
+                                                    <button className="btn btn-primary" onClick={handleRefresh}>Continue</button>
+                                                    :
+                                                    <Link to={success_page}> <button className="btn btn-primary">Continue</button></Link>
+                                            }
+
+                                        </div>
+                                    </div> : null
+                                }
+                                {state.status == "FAILED" ?
+                                    <div className={classes.cardFooter}>
+                                        <div className="btn-section">
+                                            {
+                                                props.variant == "SAME_PAGE_REDIRECT" ?
+                                                    <button className="btn btn-outline-default" onClick={handleRefresh}>Continue</button>
+                                                    :
+                                                    <Link to={success_page}> <button className="btn btn-outline-default">Continue</button></Link>
+                                            }
+
+                                            <div className="d-flex">
+                                                <a href={"/logs?global_task_id=" + task_id + "&num=" + state.triggered_service?.id + "&service_name=" + state.triggered_service?.entity_detail?.component?.name + "&service_env=" + state.triggered_service?.entity_detail?.component_env?.name} target="_blank" className="btn btn-outline-default">View Logs</a>
+                                                {/* <button className="btn btn-outline-default" onClick={fetchLogs}>View Logs</button> */}
+                                                {
+                                                    props.variant == "cluster_onboarding" ?
+                                                        <button className="btn btn-primary" onClick={handleRefresh}>Retry</button>
+                                                        :
+                                                        <button onClick={triggerBuildDeploy} className="btn btn-primary">Retry</button>
+
+                                                }
+                                            </div>
+
+                                        </div>
+                                    </div> : null
+                                }
+
+
+                            </>
+
+                        }
+                        {/* {state.view_logs ? <ViewLogsInfiniteScroll1 selected_tab_id={state.selected_tab_id} closeLogs={closeLogs} closeTab={closeTab} changeTab={changeTab} tabsData={state.logMetadata} childInherits={state.infiniteScrollInherits} /> : null} */}
+
+                    </div>
+                </div>
+
+
+    )
+}
+
+StepProgressDetailed.propTypes = {
+    ...PropTypes.objectOf(PropTypes.any),
+}
+
+export default StepProgressDetailed;
+
+
+const useStyles = makeStyles(theme => ({
+    root: {
+        height: '90vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: '100%',
+        position: 'relative'
+
+    },
+    card: {
+        borderRadius: '4px',
+        border: '1px solid #e4e4e4',
+        overflow: 'hidden',
+        width: '65rem',
+        margin: '16rem auto',
+        background: '#fff',
+        '& #viewFullLogs': {
+            left: '0px',
+            bottom: '-10rem'
+        }
+    },
+    cardHeader: {
+        borderBottom: '1px solid #e4e4e4',
+        padding: '15px',
+        backgroundColor: '#f9f9f9',
+        fontSize: '16px',
+    },
+    cardBody: {
+        '& .main-text': {
+            fontSize: '32px',
+            textAlign: 'center',
+            fontWeight: 300,
+            color: '#000'
+        },
+        '& .linear-progressbar': {
+            padding: '0px 110px',
+            '& .MuiLinearProgress-root': {
+                height: '7px'
+            },
+            '& .MuiLinearProgress-colorPrimary': {
+                backgroundColor: '#eaeaea',
+                borderRadius: '4px'
+
+            },
+            '& .MuiLinearProgress-barColorPrimary': {
+                backgroundColor: '#0db79b'
+            }
+        },
+        '& .hint-text': {
+            textAlign: 'center',
+            display: 'block',
+            marginBottom: '10px',
+            fontSize: '12px'
+        },
+        '& .border-danger': {
+            border: '2px solid #ff5252',
+            color: '#ff5252',
+            backgroundColor: '#ffe9e9'
+        }
+    },
+    contentbox: {
+        margin: '20px auto 0px',
+        display: 'flex',
+        alignItems: 'center',
+        flexDirection: 'column',
+        borderTop: '1px solid #dedede',
+        '& .msg-div': {
+            display: 'grid',
+            gridTemplateColumns: '40px 220px 80px',
+            alignItems: 'center',
+            fontSize: '13px',
+            borderBottom: '1px solid #dedede',
+            width: '100%',
+            padding: '10px',
+            justifyContent: 'center',
+            '&:last-child': {
+                borderBottom: 'none'
+            }
+        },
+        '& .icon-circle': {
+            height: '30px',
+            width: '30px',
+            margin: '0px 5px',
+            border: '2px solid transparent',
+            borderRadius: '50%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            '& .flaticon-check-symbol': {
+                color: '#0db79b',
+                lineHeight: 1,
+                '&:before': {
+                    fontSize: '18px'
+                }
+            },
+            '& .fa': {
+                color: '#ff5252',
+                lineHeight: 1,
+                '&:before': {
+                    fontSize: '22px'
+                }
+            },
+            '& .flaticon-clock-with-white-face': {
+                color: '#ffc002',
+                lineHeight: 1,
+                '&:before': {
+                    fontSize: '22px'
+                }
+            },
+            '&.success': {
+                borderColor: 'transparent'
+            },
+            '&.danger': {
+                borderColor: 'transparent',
+                backgroundColor: 'transparent'
+            },
+            '&.pending': {
+                color: '#ffc002',
+                backgroundColor: 'transparent',
+            }
+        },
+    },
+    cardFooter: {
+        borderTop: '1px solid #e4e4e4',
+        padding: '15px',
+        backgroundColor: '#f9f9f9',
+        '& .btn-section': {
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            '& .btn-primary': {
+                backgroundColor: '#0086FF',
+                color: '#fff',
+                '& .flaticon-keyboard-right-arrow-button-1': {
+                    color: '#fff',
+                    '&:before': {
+                        marginLeft: '0px!important'
+                    }
+                }
+            },
+            '& .btn-outline-default': {
+                color: '#6c757d',
+                border: '1px solid #cbcbcb!important',
+                backgroundColor: '#f9f9f9',
+                '&:hover': {
+                    color: '#6c757d!important',
+                    backgroundColor: '#f1f1f1',
+                }
+            }
+        }
+    },
+    mainMsg: {
+        fontSize: '24px',
+        padding: '20px 0px',
+        fontWeight: 300,
+        lineHeight: 1.2,
+        textAlign: 'center'
+    },
+
 }))
 
+const newTypeStyles = makeStyles(theme => ({
+    root: {
+        display: "flex",
+        width: "655px",
+        flexDirection: "column",
+        alignItems: "flex-start",
+        borderRadius: "8px",
+        border: "1px solid #DFDFDF",
+        background: "#FFF",
+    },
+    cardBody: {
+        display: "flex",
+        paddingTop: "12px",
+        flexDirection: "column",
+        alignItems: "center",
+        alignSelf: "stretch",
+        "& .main-text": {
+            fontSize: "18px",
+            fontWeight: "500",
+            color: "#124D9B",
+        },
+        '& .hint-text': {
+            fontSize: "14px",
+            fontWeight: "400",
+            color: "#2F2F2F",
+        },
+        '& .linear-progressbar': {
+            padding: '0px 110px',
+            width: "100%",
+            '& .MuiLinearProgress-root': {
+                height: '7px'
+            },
+            '& .MuiLinearProgress-colorPrimary': {
+                backgroundColor: '#eaeaea',
+                borderRadius: '4px'
 
-const SkeletonRow = () => {
-  return (
-    <>
-      <div className="table-view-row">
-        <GenericSkeleton
-          variant={"rect"}
-          width={"auto"}
-          height={"34px"}
-          style={{ borderRadius: "4px" }}
-        />
-      </div>
-      <div className="table-view-row">
-        <GenericSkeleton
-          variant={"rect"}
-          width={"auto"}
-          height={"34px"}
-          style={{ borderRadius: "4px" }}
-        />
-      </div>
-      <div className="table-view-row">
-        <GenericSkeleton
-          variant={"rect"}
-          width={"auto"}
-          height={"34px"}
-          style={{ borderRadius: "4px" }}
-        />
-      </div>
-      <div className="table-view-row">
-        <GenericSkeleton
-          variant={"rect"}
-          width={"auto"}
-          height={"34px"}
-          style={{ borderRadius: "4px" }}
-        />
-      </div>
-      <div
-        className="table-view-row"
-        style={{ justifySelf: "end", width: "100%" }}
-      >
-        <GenericSkeleton
-          variant={"rect"}
-          width={"auto"}
-          height={"34px"}
-          style={{ borderRadius: "4px" }}
-        />
-      </div>
-    </>
-  );
-};
+            },
+            '& .MuiLinearProgress-barColorPrimary': {
+                backgroundColor: '#0086FF'
+            }
+        },
+    },
+    contentbox: {
+        display: "flex",
+        width: "100%",
+        padding: "24px 20px",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: "16px",
+        alignSelf: "stretch",
+        '& .view-log-btn': {
+            display: "flex",
+            height: "28px",
+            padding: "8px 16px",
+            justifyContent: "center",
+            alignItems: "center",
+            gap: "6px",
+            borderRadius: "6px",
+            border: "1px solid #9DC0EE",
+            background: "#FFF",
+            color: "#0086FF",
+            '&:hover': {
+                background: "#0086FF",
+                color: "#FFF",
+            },
+        },
+
+        '& .msg-box': {
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            alignSelf: "stretch",
+            borderRadius: "10px",
+            border: "1px solid #E6E6E6",
+        },
+        '& .first-msg-div': {
+
+        },
+        '& .last-msg-div': {
+
+        },
+        '& .msg-div': {
+            display: "flex",
+            padding: "10px 24px",
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "10px",
+            alignSelf: "stretch",
+            borderBottom: "1px solid #E6E6E6",
+            '& .success': {
+                display: "flex",
+                padding: "4px",
+                alignItems: "center",
+                gap: "10px",
+                borderRadius: "50%",
+                background: "#E6FBEA",
+                color: "#129E5B",
+                height: "26px",
+            },
+            '& .failed': {
+                display: "flex",
+                padding: "4px",
+                alignItems: "center",
+                gap: "10px",
+                borderRadius: "50%",
+                background: "#FCF6E1",
+                color: "#C11212",
+                height: "26px",
+            },
+            '& .running': {
+                display: "flex",
+                padding: "4px",
+                alignItems: "center",
+                gap: "10px",
+                borderRadius: "50%",
+                background: "#EBF5FF",
+                color: "#0086FF",
+                height: "26px",
+            },
+            '& .color-success': {
+                display: "flex",
+                padding: "5px 8px",
+                justifyContent: "center",
+                alignItems: "center",
+                gap: "10px",
+                borderRadius: "6px",
+                background: "#E6FBEA",
+                color: "#129E5B",
+            },
+            '& .color-danger': {
+                display: "flex",
+                padding: "5px 8px",
+                justifyContent: "center",
+                alignItems: "center",
+                gap: "10px",
+                borderRadius: "6px",
+                background: "#FCF6E1",
+                color: "#E1941D",
+            }
+        },
+    },
+    cardFooter: {
+        display: "flex",
+        padding: "16px",
+        justifyContent: "flex-end",
+        alignItems: "center",
+        alignSelf: "stretch",
+        background: "#FAFAFA",
+        borderRadius: "8px",
+        gap: "12px",
+        '& .view-log-btn': {
+            display: "flex",
+            height: "40px",
+            padding: "8px 16px",
+            justifyContent: "center",
+            alignItems: "center",
+            gap: "6px",
+            borderRadius: "6px",
+            border: "1px solid #9DC0EE",
+            background: "#FFF",
+            color: "#0086FF",
+            fontSize: "12px",
+            '&:hover': {
+                background: "#0086FF",
+                color: "#FFF",
+            }
+        },
+        '& .re-configure-btn': {
+            display: "flex",
+            height: "40px",
+            padding: "11px 16px",
+            justifyContent: "center",
+            alignItems: "center",
+            gap: "6px",
+            borderRadius: "6px",
+            background: "#FEA111",
+            color: "#FFFFFF",
+            fontSize: "12px",
+            border: "none",
+            marginLeft: "12px",
+        },
+        "& .view-permisson-btn": {
+            border: "none",
+            display: "flex",
+            height: "40px",
+            padding: "8px 16px",
+            justifyContent: "center",
+            alignItems: "center",
+            gap: "6px",
+            borderRadius: "6px",
+            background: "#0086FF",
+            color: "#FFF",
+            '&:hover': {
+                background: "#03234D",
+                color: "#FFF",
+            },
+        },
+    }
+}))
+
+const configDbChangesStyles = makeStyles(theme => ({
+    root: {
+        display: "flex",
+        width: "655px",
+        flexDirection: "column",
+        alignItems: "flex-start",
+        borderRadius: "8px",
+        border: "1px solid #DFDFDF",
+        background: "#FFF",
+    },
+    cardBody: {
+        display: "flex",
+        paddingTop: "12px",
+        flexDirection: "column",
+        alignItems: "center",
+        alignSelf: "stretch",
+        "& .main-text": {
+            fontFamily: "Montserrat",
+            fontSize: "18px",
+            fontWeight: "600",
+            color: "#2F2F2F"
+        },
+        '& .hint-text': {
+            fontFamily: "Montserrat",
+            fontSize: "14px",
+            fontWeight: "400",
+            color: "#2F2F2F"
+        },
+        '& .linear-progressbar': {
+            padding: '0px 110px',
+            width: "100%",
+            '& .MuiLinearProgress-root': {
+                height: '7px'
+            },
+            '& .MuiLinearProgress-colorPrimary': {
+                backgroundColor: '#eaeaea',
+                borderRadius: '4px'
+
+            },
+            '& .MuiLinearProgress-barColorPrimary': {
+                backgroundColor: '#0086FF'
+            }
+        },
+    },
+    contentbox: {
+        display: "flex",
+        width: "100%",
+        padding: "24px 20px",
+        flexDirection: "column",
+        alignItems: "center",
+        gap: "16px",
+        alignSelf: "stretch",
+        '& .view-log-btn': {
+            display: "flex",
+            height: "28px",
+            padding: "8px 16px",
+            justifyContent: "center",
+            alignItems: "center",
+            gap: "6px",
+            borderRadius: "6px",
+            border: "1px solid #9DC0EE",
+            background: "#FFF",
+            color: "#0086FF",
+            '&:hover': {
+                background: "#0086FF",
+                color: "#FFF",
+            },
+        },
+
+        '& .msg-box': {
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            alignSelf: "stretch",
+            borderRadius: "10px",
+            border: "1px solid #E6E6E6",
+        },
+        '& .first-msg-div': {
+
+        },
+        '& .last-msg-div': {
+
+        },
+        '& .msg-div': {
+            display: "flex",
+            padding: "10px 24px",
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "10px",
+            alignSelf: "stretch",
+            borderBottom: "1px solid #E6E6E6",
+            '& .success': {
+                display: "flex",
+                padding: "4px",
+                alignItems: "center",
+                gap: "10px",
+                borderRadius: "50%",
+                background: "#E6FBEA",
+                color: "#129E5B",
+                height: "26px",
+            },
+            '& .failed': {
+                display: "flex",
+                padding: "4px",
+                alignItems: "center",
+                gap: "10px",
+                borderRadius: "50%",
+                background: "#FCF6E1",
+                color: "#C11212",
+                height: "26px",
+            },
+            '& .running': {
+                display: "flex",
+                padding: "4px",
+                alignItems: "center",
+                gap: "10px",
+                borderRadius: "50%",
+                background: "#EBF5FF",
+                color: "#0086FF",
+                height: "26px",
+            },
+            '& .color-success': {
+                display: "flex",
+                padding: "5px 8px",
+                justifyContent: "center",
+                alignItems: "center",
+                gap: "10px",
+                borderRadius: "6px",
+                background: "#E6FBEA",
+                color: "#129E5B",
+            },
+            '& .color-danger': {
+                display: "flex",
+                padding: "5px 8px",
+                justifyContent: "center",
+                alignItems: "center",
+                gap: "10px",
+                borderRadius: "6px",
+                background: "#FCF6E1",
+                color: "#E1941D",
+            },
+            '& .color-warning': {
+                display: "flex",
+                padding: "5px 8px",
+                justifyContent: "center",
+                alignItems: "center",
+                gap: "10px",
+                borderRadius: "6px",
+                background: "#FCF6E1",
+                color: "#E1941D",
+            },
+        },
+    },
+    cardFooter: {
+        display: "flex",
+        padding: "16px",
+        justifyContent: "flex-end",
+        alignItems: "center",
+        alignSelf: "stretch",
+        background: "#FAFAFA",
+        borderRadius: "8px",
+        gap: "12px",
+        '& .view-log-btn': {
+            display: "flex",
+            height: "40px",
+            padding: "8px 16px",
+            justifyContent: "center",
+            alignItems: "center",
+            gap: "6px",
+            borderRadius: "6px",
+            border: "1px solid #9DC0EE",
+            background: "#FFF",
+            color: "#0086FF",
+            fontSize: "12px",
+            '&:hover': {
+                background: "#0086FF",
+                color: "#FFF",
+            }
+        },
+        '& .re-configure-btn': {
+            display: "flex",
+            height: "40px",
+            padding: "11px 16px",
+            justifyContent: "center",
+            alignItems: "center",
+            gap: "6px",
+            borderRadius: "6px",
+            background: "#FEA111",
+            color: "#FFFFFF",
+            fontSize: "12px",
+            border: "none",
+            marginLeft: "12px",
+        },
+        "& .view-permisson-btn": {
+            border: "none",
+            display: "flex",
+            height: "40px",
+            padding: "8px 16px",
+            justifyContent: "center",
+            alignItems: "center",
+            gap: "6px",
+            borderRadius: "6px",
+            background: "#0086FF",
+            color: "#FFF",
+            '&:hover': {
+                background: "#03234D",
+                color: "#FFF",
+            },
+        },
+    }
+}))
