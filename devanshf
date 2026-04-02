@@ -1,0 +1,1214 @@
+import React, { useEffect, useState } from 'react';
+import { makeStyles } from '@mui/styles';
+import Drawer from '@mui/material/Drawer';
+import { Link, useNavigate, useMatch, useResolvedPath } from "react-router-dom";
+import Box from '@mui/material/Box';
+import Dialog from '@mui/material/Dialog';
+import Tooltip from '@mui/material/Tooltip';
+import { GenerateRouteFromParams } from '../../routes';
+import { IsSuperUser } from '../../util/security';
+import { isSelectedUrl } from './NavigationNew';
+import { useLocation } from 'react-router-dom';
+import { SimpleMenu } from './SimpleMenu';
+import BreadcrumbsNew from './BreadCrumbs';
+import PremiumInfo from '../../components/genericComponents/PremiumInfo';
+import { usePermissionAutoLoader } from '../../util/permissionAutoLoader';
+import Button from '../../components/genericComponents/Button';
+import CopilotOlly from '../../views/copilotOlly/Index';
+// import { generateApplicationPermissionPayload, generateAppsListingPermissionPayload } from '../../util/permissionsPayloadGenerators';
+
+const drawerWidth = 86;
+const additionalDrawerWidth = 170;
+let incWidth = false;
+
+const premiumFeatureUrl = [ // just add premium feature data here to set alerts
+  { url: '/velocity-insights', featureKey: 'Velocity_insights', featureName: 'Velocity Insight' },
+]
+
+export default function SideNavNew({ onChangeAlert, ...props }) {
+  const classes = useStyles();
+
+  const data = props.data;
+  const mainOptions = props.mainOptions;
+  console.log(mainOptions, "fsajfdjajkdfsa")
+  const handleDrawerClose = props.handleDrawerClose;
+  const handleDrawerOpen = props.handleDrawerOpen;
+  const match = useResolvedPath().pathname;
+  console.log(match, "matchmatchmatch")
+  const history = useNavigate();
+  console.log(history, "flksakfdksaflaks")
+  const [additonalDrawer, setAdditionalDrawer] = useState(false);
+  const [searchDialog, setSearchDialog] = useState(false);
+  const [selectedOption, setSelectedOption] = useState(null);
+  const [subOptions, setSubOptions] = useState([]);
+  const [moreOptions, setMoreOptions] = useState([]);
+  const [selectedApp, setSelectedApp] = useState(null);
+  const [allOptions, setAllOption] = useState([]);
+  const [staticRoutes, setStaticRoutes] = useState([]);
+  // const [breadCrumbList, setBreadCrumbList] = useState([]);
+  const { autoLoadPermissions } = usePermissionAutoLoader();
+  const handleClickOpenOllyDialog = props.handleClickOpenOllyDialog ? props.handleClickOpenOllyDialog : () => { };
+  const setBreadCrumbList = props.setBreadCrumbList ? props.setBreadCrumbList : () => { };
+  const [alertState, setAlertState] = useState({
+    showStripForGlobalPlan: false,
+    showStripForPremiumFeature: false,
+    remainingDaysForGlobalPlan: null,
+    license_data: null,
+    premiumData: null,
+    premiumFeatureInfo: null,
+    remainingDaysForPremium: null
+  })
+  let featureKey = 'Velocity_insights';
+  const location = useLocation();
+
+
+  const currentPath = location?.pathname
+  console.log(currentPath, 'cpt_0los')
+
+  useEffect(() => {
+    console.log("is this called")
+    setTimeout(() => {
+      const license_data = localStorage.getItem('license_data');
+      if (license_data) {
+        const parsedData = JSON.parse(license_data)
+        const premiumFeatures = parsedData?.Premium_Features
+        const premiumFeatureData = premiumFeatures?.[featureKey]
+        console.log('def_00po', premiumFeatureData)
+
+        const remainingDaysForGlobalPlan = calculateDaysUntilLicenseEnd(parsedData);
+        console.log('def_00p', remainingDaysForGlobalPlan);
+        const remainingDaysForPremium = calculateDaysUntilLicenseEndForPremium(premiumFeatureData);
+
+        console.log(remainingDaysForPremium, 'feature_001')
+        const accessibility = premiumFeatureData?.Accessibility
+        console.log('asx_0p', accessibility)
+
+        let premiumFeatureInfo = ''
+        if (accessibility == false) {
+          premiumFeatureInfo = 'not-accessible'
+        }
+        else {
+          premiumFeatureInfo = accessibility
+
+        }
+        const typeOfAlert = checkForSuitableAlertComponent({
+          license_data: parsedData,
+          premiumData: premiumFeatureData,
+          remainingDaysForGlobalPlan: remainingDaysForGlobalPlan,
+          remainingDaysForPremium: remainingDaysForPremium,
+          premiumFeatureInfo: premiumFeatureInfo
+        })
+
+        setAlertState((new_state) => ({
+          ...new_state,
+          license_data: parsedData,
+          premiumData: premiumFeatureData,
+          remainingDaysForGlobalPlan: remainingDaysForGlobalPlan,
+          remainingDaysForPremium: remainingDaysForPremium,
+          premiumFeatureInfo: premiumFeatureInfo,
+          showStripForGlobalPlan: typeOfAlert?.globalAlert ? true : false,
+          showStripForPremiumFeature: typeOfAlert?.premiumAlert ? true : false,
+          featureKey: typeOfAlert?.featureKey,
+          featureName: typeOfAlert?.featureName
+
+        }))
+        if (typeOfAlert?.globalAlert || typeOfAlert?.premiumAlert) {
+          onChangeAlert(true)
+        }
+      }
+    }, 200)
+
+  }, [])
+
+  console.log(currentPath, 'cpt_0los')
+  const checkForSuitableAlertComponent = (data) => {
+
+    const remainingDaysForGlobalPlan = data?.remainingDaysForGlobalPlan
+    const remainingDaysForPremium = data?.remainingDaysForPremium
+    console.log(data, 'data_0ppppl,m')
+    let premiumFeatureData = premiumFeatureUrl?.find(({ url }) => url == currentPath)
+    console.log(premiumFeatureData, 'cpr_0p')
+    if (!premiumFeatureData) {
+      premiumFeatureData = {}
+    }
+    const { url, featureKey, featureName } = premiumFeatureData
+
+    if (url && (remainingDaysForPremium < 31 || data?.premiumFeatureInfo == "not-accessible")) {
+      return {
+        globalAlert: false,
+        premiumAlert: true,
+        featureKey: featureKey,
+        featureName: featureName
+      }
+    }
+
+    else {
+      if (data?.license_data && remainingDaysForGlobalPlan < 31) {
+        return {
+          globalAlert: true,
+          premiumAlert: false
+        }
+      }
+
+    }
+
+  }
+
+
+  function calculateDaysUntilLicenseEnd(licenseData) {
+    if (licenseData) {
+      const licenseEndDate = licenseData?.License_end_date
+      const endDate = new Date(licenseEndDate);
+      endDate.setHours(0, 0, 0, 0); // 00:00:00.000
+
+      // Get the current date
+      const currentDate = new Date();
+      console.log(currentDate, endDate, 'poll')
+      // Calculate the difference in milliseconds
+      const timeDifference = endDate - currentDate;
+      let daysDifference = timeDifference / (1000 * 60 * 60 * 24);
+      if (daysDifference < 0) {
+        return daysDifference
+      }
+      if (daysDifference < 1) {
+        daysDifference = 0
+      }
+      else {
+        daysDifference = Math.ceil(daysDifference)
+      }
+
+      // const daysDifference = Math.floor(timeDifference / (1000 * 60 * 60 * 24));
+      console.log(daysDifference, 'dff_00p')
+      return daysDifference;
+    }
+  }
+  function calculateDaysUntilLicenseEndForPremium(data) {
+    if (data) {
+      const licenseEndDate = data?.end_date
+      // Convert the input license end date string to a Date object
+      const endDate = new Date(licenseEndDate);
+      endDate.setHours(0, 0, 0, 0); // 00:00:00.000
+      const currentDate = new Date();
+      const timeDifference = endDate - currentDate;
+      let daysDifference = timeDifference / (1000 * 60 * 60 * 24);
+      if (daysDifference < 0) {
+        return daysDifference
+      }
+      if (daysDifference < 1) {
+        daysDifference = 0
+      }
+      else {
+        daysDifference = Math.ceil(daysDifference)
+      }
+      return daysDifference;
+    }
+  }
+
+  const onCloseLicenseStrips = () => {
+    setAlertState((new_state) => ({
+      ...new_state,
+      showStripForGlobalPlan: false
+    }))
+    onChangeAlert(false)
+  }
+
+  const onCloseForPremiumAlerts = () => {
+    setAlertState((new_state) => ({
+      ...new_state,
+      premiumFeatureInfo: false
+    }))
+    onChangeAlert(false)
+  }
+
+
+
+  console.log("sbdjbdsjsd", data);
+  const handleAddtionalDrawerOpen = () => {
+    setAdditionalDrawer(true);
+    handleDrawerOpen();
+    //console.log("hghfgfg",additonalDrawer,incWidth);
+  }
+
+  const handleAddtionalDrawerClose = () => {
+    console.log("njnsjndjs", additonalDrawer);
+    setAdditionalDrawer(false);
+    setSearchDialog(false);
+    handleDrawerClose()
+  }
+
+  const handleMoreDialogOpen = () => {
+    setSearchDialog(true);
+  }
+  const handleMoreDialogClose = () => {
+    setSearchDialog(false);
+  }
+
+  function isPatternMatched(patternLink, link) {
+    // Construct regular expression pattern dynamically
+    const regexPattern = new RegExp(
+      "^" +
+      patternLink
+        .replace(/\//g, "\\/") // Escape forward slashes
+        .replace(/:\w+/g, "\\d+") + // Replace placeholders with "\\d+" (which matches digits)
+      "$"
+    );
+
+    // Test if the link matches the pattern
+    return regexPattern.test(link);
+  }
+
+  function moreOptionClick(option, subOptions, mainkey) {
+    console.log("is this called")
+    let subOptionsList = [];
+    console.log("ndjnsjds", option, subOptions, selectedOption);
+    // if(selectedOption && selectedOption.key && selectedOption.key == "application"){
+    //   autoLoadPermissions({
+    //     direct: generateApplicationPermissionPayload(option.id)
+    //   });
+    // }
+    let subOptionsKeys = Object.keys(subOptions);
+    subOptionsKeys.forEach((key) => {
+      let opt = subOptions[key];
+      let paramKey = mainkey ? mainkey + "_id" : selectedOption.key + "_id";
+      let params = { [paramKey]: option.id.toString() };
+      let path = GenerateRouteFromParams(opt.path, params);
+      console.log("oyiomnd", path, params);
+      subOptionsList.push({ key: opt.key, label: opt.label, path: path });
+    })
+    setSubOptions(subOptionsList);
+    setSelectedApp(option);
+    setLastUsedAppOrClusterinLocalStrorage(option);
+    handleMoreDialogClose();
+    history(subOptionsList[0].path);
+  }
+
+  console.log("hghfgfg", additonalDrawer, incWidth);
+
+  //to get the last used app and cluster from local storage
+  function getLastUsedAppOrCluster(option) {
+    let localStorageKey = IsSuperUser() ? 'last_used_cluster' : 'last_used_app';
+    let lastUsedAppOrCluster = localStorage.getItem(localStorageKey);
+    return JSON.parse(lastUsedAppOrCluster);
+  }
+
+  function optionClick(option) {
+    console.log(option, "fsafklaskkflsa")
+    if (option.type == "dynamic-route") {
+      let lastUsedAppOrCluster = getLastUsedAppOrCluster(option);
+      if (lastUsedAppOrCluster) {
+        console.log("bdhbsiruiur", lastUsedAppOrCluster, option)
+        // if (option.key && option.key == "application") {
+        //   autoLoadPermissions({
+        //     direct: generateApplicationPermissionPayload(lastUsedAppOrCluster.id && lastUsedAppOrCluster.id)
+        //   });
+        // }
+        setSelectedOption(option);
+        //setSelectedApp(null);
+        moreOptionClick(lastUsedAppOrCluster, option.subOptions, option.key);
+        if (option.staticRoutes && Object.keys(option.staticRoutes).length > 0) {
+          let staticSubOptionList = []
+          Object.keys(option.staticRoutes).forEach((key) => {
+            let opt = option.staticRoutes[key];
+            staticSubOptionList.push({ key: opt.key, label: opt.label, path: opt.path })
+          })
+          setStaticRoutes(staticSubOptionList)
+        }
+        handleAddtionalDrawerOpen();
+      } else {
+        if (!selectedApp) {
+          setSelectedApp(null);
+          setSelectedOption(option);
+          handleAddtionalDrawerOpen();
+          setSubOptions([]);
+          let moreOptionsList = [];
+          if (data[option.key]) {
+            let keys = Object.keys(data[option.key]);
+            keys.forEach((ele) => {
+              let ops = data[option.key][ele];
+              moreOptionsList.push(ops);
+            });
+            setMoreOptions(moreOptionsList);
+          } else {
+            setMoreOptions(moreOptionsList);
+          }
+        } else {
+          handleAddtionalDrawerOpen();
+        }
+        if (option.staticRoutes && Object.keys(option.staticRoutes).length > 0) {
+          let staticSubOptionList = []
+          Object.keys(option.staticRoutes).forEach((key) => {
+            let opt = option.staticRoutes[key];
+            staticSubOptionList.push({ key: opt.key, label: opt.label, path: opt.path })
+          })
+          setStaticRoutes(staticSubOptionList)
+        }
+      }
+
+
+    } else {
+      if (option.type == "direct-route") {
+        if (option.newTab) {
+          //open in new tab
+          window.open(option.path, '_blank');
+        } else {
+          let selected = isSelectedUrl(match, option.path);
+          setSelectedOption({ ...option, selected: selected });
+          history(option.path);
+          setSelectedApp(null);
+          setSubOptions([]);
+          handleAddtionalDrawerClose();
+        }
+      } else {
+        let subOptionsList = [];
+        let keys = Object.keys(option.subOptions);
+        keys.forEach((ele) => {
+          let ops = option.subOptions[ele];
+          subOptionsList.push(ops);
+        });
+        //Redirect(option.subOptions[keys[0]].path);
+        setSubOptions(subOptionsList);
+        setSelectedOption(option);
+        handleAddtionalDrawerOpen();
+        history(subOptionsList[0].path);
+        setSelectedApp(null);
+        setBreadCrumbList([{ label: option.label, link: option.path, order: 1 }])
+      }
+    }
+  }
+  function setLastUsedAppOrClusterinLocalStrorage(option) {
+    let localStorageKey = IsSuperUser() ? 'last_used_cluster' : 'last_used_app';
+    localStorage.setItem(localStorageKey, JSON.stringify(option));
+  }
+
+
+
+  function setMainOptions(mainOptions) {
+    console.log("dsjdhsj")
+    const mainOptionKeys = Object.keys(mainOptions);
+    const MainOptionsList = [];
+    let isSelectedFound = false;
+    console.log("dsjdhsj", mainOptions, mainOptionKeys);
+    mainOptionKeys.forEach((key) => {
+      let option = mainOptions[key];
+      console.log(option, "abjhcbahbchbds")
+      if (option.type == "direct-route") {
+        let selected = isSelectedUrl(match, option.path);
+        console.log("ytueijwi", option);
+        if (selected) {
+          setSelectedOption({ ...option, selected: selected });
+          history(option.path);
+          setBreadCrumbList([{ label: option.label, link: option.path, order: 1 }]);
+          isSelectedFound = true;
+          setSelectedApp(null);
+          setSubOptions([])
+          handleAddtionalDrawerClose()
+        }
+        MainOptionsList.push({ ...option, selected: selected })
+      } else {
+        if (option.type == "static-route") {
+          // console.log("iiruieuow",option, option.type, option.subOptions);
+          let tempOption = { ...option };
+
+          let selected = option.subOptionArray.includes(match);
+          tempOption = { ...tempOption, selected: selected };
+          if (selected) {
+            let subOptionsList = [];
+            let keys = Object.keys(option.subOptions);
+            keys.forEach((ele) => {
+              let ops = option.subOptions[ele];
+              console.log("iiruieuow", ops);
+              if (match == ops.path) {
+                //console.log("bdjhjds",bread_crumb_list,ops,match);
+                setBreadCrumbList([{ label: ops.label, link: ops.path, order: 1 }])
+              }
+              subOptionsList.push(ops);
+            });
+            //bread_crumb_list.push({label: option.label,link: option.path});
+            isSelectedFound = true;
+            setSelectedOption(option);
+            setSubOptions(subOptionsList);
+            handleAddtionalDrawerOpen()
+          }
+          //setSelectedOption(tempOption);
+          MainOptionsList.push(tempOption);
+
+        } else {
+          let tempOption = { ...option };
+          let matchUrl = match.split("/");
+          let selected = match.includes(option.ignore_sub_path[0]) && !isNaN(matchUrl[2]);
+          let staticSelected = Array.isArray(option.staticRoutesList) && option.staticRoutesList.includes(match);
+          //let selected = isSelectedUrl(match,)
+          console.log("uiuriejjwe", matchUrl, data, selected);
+          tempOption = { ...tempOption, selected: selected };
+          if (selected) {
+            let subOptionsList = [];
+            let staticSubOptionList = [];
+            let keys = Object.keys(option.subOptions);
+            let staticKeys = Object.keys(option.staticRoutes ?? {})
+            let id = matchUrl[2];
+            console.log("hdjhuisw", IsSuperUser(), data);
+            let selectedClusApp = IsSuperUser() ? data?.cluster[id] : data?.application[id];
+            console.log("hdjhuisw", selectedClusApp);
+            let moreOptionsList = [];
+            let dataKeys = Object.keys(data[option.key]);
+            dataKeys.forEach((ele) => {
+              let ops = data[option.key][ele];
+              moreOptionsList.push(ops);
+            });
+            setMoreOptions(moreOptionsList);
+            let subSlected = [];
+            keys.forEach((key) => {
+              let opt = option.subOptions[key];
+              let paramKey = option.key + "_id";
+              let params = { [paramKey]: selectedClusApp.id.toString() };
+              let path = GenerateRouteFromParams(opt.path, params);
+              if (match == path) {
+                //setBreadCrumbList([{label: opt.label,link: path}])
+                subSlected = [{ label: opt.label, link: path, order: 3 }];
+              }
+              console.log("oyiomnd", path, params);
+              subOptionsList.push({ key: opt.key, label: opt.label, path: path });
+              if (opt.entity_path) {
+                let entity_opened = isPatternMatched(opt.entity_path, match);
+                console.log("jhdchdsbcba", entity_opened);
+                if (entity_opened) {
+                  subSlected = [{ key: "", label: opt.entity_label, link: match, order: 4 }, { key: opt.key, label: opt.label, link: path, order: 3 }]
+                }
+              }
+            })
+            staticKeys.forEach((key) => {
+              let opt = option.staticRoutes[key];
+              staticSubOptionList.push({ key: opt.key, label: opt.label, path: opt.path })
+            })
+            isSelectedFound = true;
+            setBreadCrumbList([...subSlected, { label: selectedClusApp.name, link: subOptionsList[0].path, order: 2 }, { label: option.label, link: option.parent_path, order: 1 }])
+            setSelectedApp(selectedClusApp);
+            setSelectedOption(option);
+            setSubOptions(subOptionsList);
+            setStaticRoutes(staticSubOptionList);
+            handleAddtionalDrawerOpen();
+          }
+          if (staticSelected) {
+            let subOptionsList = [];
+            let staticSubOptionList = [];
+            let keys = Object.keys(option.subOptions);
+            let staticKeys = Object.keys(option.staticRoutes);
+            let lastUsedAppOrCluster = getLastUsedAppOrCluster(option);
+            let selectedClusApp;
+            console.log("hdjhuisw", IsSuperUser(), typeof lastUsedAppOrCluster, data);
+            let moreOptionsList = [];
+            let dataKeys = Object.keys(data[option.key]);
+            dataKeys.forEach((ele) => {
+              let ops = data[option.key][ele];
+              moreOptionsList.push(ops);
+            });
+            setMoreOptions(moreOptionsList);
+            let subSlected = [];
+            if (lastUsedAppOrCluster) {
+              selectedClusApp = IsSuperUser() && lastUsedAppOrCluster ? data?.cluster[lastUsedAppOrCluster?.id] : data?.application[lastUsedAppOrCluster?.id];
+              if (selectedClusApp?.id) {
+                keys.forEach((key) => {
+                  let opt = option.subOptions[key];
+                  let paramKey = option.key + "_id";
+                  let params = { [paramKey]: selectedClusApp.id.toString() };
+                  let path = GenerateRouteFromParams(opt.path, params);
+                  console.log("oyiomnd", path, params);
+                  subOptionsList.push({ key: opt.key, label: opt.label, path: path });
+                })
+              }
+            }
+            staticKeys.forEach((key) => {
+              let opt = option.staticRoutes[key];
+              if (match == opt.path) {
+                subSlected = [{ key: opt.key, label: opt.label, path: opt.path, order: selectedClusApp ? 3 : 1 }];
+              }
+              staticSubOptionList.push({ key: opt.key, label: opt.label, path: opt.path })
+            })
+
+            isSelectedFound = true;
+            setBreadCrumbList(!selectedClusApp ? [...subSlected] : [...subSlected, { label: selectedClusApp.name, link: subOptionsList[0].path, order: 2 }, { label: option.label, link: option.parent_path, order: 1 }])
+            setSelectedApp(selectedClusApp ?? null);
+            setSelectedOption(option);
+            setSubOptions(subOptionsList);
+            setStaticRoutes(staticSubOptionList)
+            handleAddtionalDrawerOpen();
+          }
+          MainOptionsList.push(tempOption);
+
+        }
+      }
+    });
+    console.log("uiurene", isSelectedFound)
+    if (!isSelectedFound) {
+      console.log("nsdjhdj", isSelectedFound);
+      setSelectedApp(null);
+      setSelectedOption(null);
+      setSubOptions([]);
+      setBreadCrumbList([]);
+      handleAddtionalDrawerClose();
+    }
+    return MainOptionsList;
+  }
+  function handleHomeClick() {
+    let path = IsSuperUser() ? "/ClusterDashboard" : "/ApplicationDashboard";
+    history(path);
+    setSelectedOption(null);
+    handleAddtionalDrawerClose();
+    setSubOptions([]);
+  }
+  useEffect(() => {
+    console.log("is this called")
+    let allOptionsList = setMainOptions(mainOptions)
+    setAllOption(allOptionsList);
+    if (match == "/ApplicationDashboard" || match == "/ClusterDashboard") {
+      setSelectedApp(null);
+      setSelectedOption(null);
+      setSubOptions([]);
+      setBreadCrumbList([]);
+    }
+  }, [match])
+
+
+  console.log("ndsjksj", allOptions, selectedOption);
+  // console.log("hdhjdshj", breadCrumbList);
+  console.log('alert_00p_pm', alertState)
+
+  return (
+    <Box sx={{ display: "flex" }}>
+      <div style={{ position: "fixed", top: 0, left: 0, width: "100%", zIndex: '999', transition: "margin 0.3s ease-in-out" }} className={additonalDrawer ? classes.additionalMargin : classes.defaultMargin}>
+        {/* {
+          alertState?.showStripForGlobalPlan &&
+          <LicenseExpirationStatusComponent remainingDays={alertState?.remainingDaysForGlobalPlan}
+            onClose={onCloseLicenseStrips}
+            licenseData={alertState?.license_data}
+            user={IsSuperUser('loading_routes') ? "super-user" : "normal-user"}
+            showStrip={alertState?.showStripForGlobalPlan}
+            additionalDrawer={additonalDrawer}
+          />
+        } */}
+
+        {
+          alertState?.showStripForPremiumFeature &&
+          <PremiumInfo featureName={alertState?.featureName}
+            featureKey={alertState?.featureKey}
+            premiumFeatureInfo={alertState?.premiumFeatureInfo}
+            remainingDays={alertState?.remainingDaysForPremium}
+            onClose={onCloseForPremiumAlerts}
+            data={alertState?.premiumData}
+            additionalDrawer={additonalDrawer}
+          />
+        }
+
+      </div>
+      <Drawer
+        className={classes.drawer}
+        //style={{width: additonalDrawer? drawerWidth + additionalDrawerWidth : drawerWidth,}}
+        variant="permanent"
+        classes={{
+          paper: classes.drawerPaper,
+        }}
+        anchor="left"
+      >
+        <div className={classes.permanentNav + ' d-flex f-direction-column'} style={{ zIndex: "9990" }}>
+          <div className={classes.itemBox} onClick={handleHomeClick} role='button' tabIndex={0} onKeyDown={() => { }}>
+            <img src='/images/BP-new.svg' alt='buildpiper' />
+            <span className='font-weight-500 color-white loading nav-label' style={{ fontSize: "var(--font-11)", marginTop: "var(--space-7)" }}>Home</span>
+          </div>
+          <div style={{ overflowY: "overlay" }}>
+            {
+              allOptions.length > 0 && allOptions.map((opt, index) => {
+                if (opt.condition || opt.condition == null) {
+                  return <MainOption option={opt} optionClick={optionClick} selectedOption={selectedOption} />
+                } else {
+                  return
+                }
+              })
+            }
+          </div>
+          <div className='d-flex align-center justify-center' style={{ position: "relative", marginTop: 'auto', marginBottom: 'var(--space-12)'}}>
+            <SimpleMenu />
+            {
+              !additonalDrawer &&
+              <div className={classes.toggleChip + ' d-flex align-center justify-center'} style={{ transform: "rotate(180deg)" }} onClick={additonalDrawer ? handleAddtionalDrawerClose : handleAddtionalDrawerOpen} role='button' tabIndex={0} onKeyDown={() => { }}>
+                <span className='ri-arrow-right-s-line' style={{fontSize: 'var(--font-20)', transform: "rotate(180deg)" }}></span>
+              </div>
+            }
+
+          </div>
+        </div>
+        <SubOptions additionalDrawer={additonalDrawer} handleAddtionalDrawerOpen={handleAddtionalDrawerOpen} handleAddtionalDrawerClose={handleAddtionalDrawerClose} openMoreDialog={handleMoreDialogOpen} selectedOption={selectedOption} subOptions={subOptions} selectedApp={selectedApp} setBreadCrumbList={setBreadCrumbList} staticSubOptions={staticRoutes} />
+
+        <MoreOptionDialog open={searchDialog} onClose={handleMoreDialogClose} selectedOption={selectedOption} moreOptions={moreOptions} selectedApp={selectedApp} onClick={moreOptionClick} />
+      </Drawer>
+    </Box>
+  );
+}
+
+const MainOption = (props) => {
+  const classes = useStyles();
+  const option = props.option;
+  const optionClick = props.optionClick;
+  const selectedOption = props.selectedOption;
+  return (
+    <>
+      {
+        option.type == "direct-route" ?
+          <div className={option?.key == selectedOption?.key ? classes.itemBox + " " + classes.selectedItemBox : classes.itemBox} onClick={option.key == "cluster" ? () => { } : () => { optionClick(option) }} role='button' tabIndex={0} onKeyDown={() => { }}>
+            {option.isImg ?
+              <img className='nav-icon-img' src={option.icon} alt={option.label} width={20} height={20} />
+              :
+              <span className={option.icon + " font-20 color-white nav-icon"}></span>
+            }
+            <span className='font-11 font-weight-500 color-white loading line-normal nav-label'>
+              {option.label.includes(' ') ?
+                option.label.split(' ').map((part, index) => (
+                  <React.Fragment key={index}>
+                    {index > 0 && <br />}
+                    {part}
+                  </React.Fragment>
+                ))
+                :
+                option.label
+              }
+            </span>
+          </div>
+
+          :
+          <div className={option?.key == selectedOption?.key ? classes.itemBox + " " + classes.selectedItemBox : classes.itemBox} role="button" tabIndex={0} onClick={() => { optionClick(option) }} onKeyDown={() => { }}> {/*onClick={()=>{optionClick(option)}} */}
+            {option.isImg ?
+              <img className='nav-icon-img' src={option.isImg} alt={option.label} width={20} height={20} />
+              :
+              <span className={option.icon + " font-20 color-white nav-icon"}></span>
+            }
+            <span className='font-11 font-weight-500 color-white loading line-normal nav-label'>
+              {option.label.includes(' ') ?
+                option.label.split(' ').map((part, index) => (
+                  <React.Fragment key={index}>
+                    {index > 0 && <br />}
+                    {part}
+                  </React.Fragment>
+                ))
+                :
+                option.label
+              }
+            </span>
+          </div>
+
+      }
+
+    </>
+  );
+}
+
+const SubOptions = (props) => {
+  const classes = useStyles();
+  const additonalDrawer = props.additionalDrawer;
+  const match = useResolvedPath().pathname;
+  console.log("ksmdksjmdkas", additonalDrawer)
+  const handleAddtionalDrawerOpen = props.handleAddtionalDrawerOpen;
+  const handleAddtionalDrawerClose = props.handleAddtionalDrawerClose;
+  const openMoreDialog = props.openMoreDialog;
+  const selectedOption = props.selectedOption;
+  const subOptions = props.subOptions;
+  const selectedApp = props.selectedApp;
+  const staticSubOptions = props.staticSubOptions;
+  console.log(selectedApp, "selectedAppselectedApp")
+  const setBreadCrumbList = props.setBreadCrumbList;
+  console.log(subOptions, "sgdvcgsdvc")
+  const history = useNavigate();
+  const [showDropdown, setShowDropdown] = useState(false)
+
+
+  useEffect(() => {
+    console.log("is this called")
+    if (selectedApp && selectedApp.name) {
+      setShowDropdown(true);
+    }
+  }, [selectedApp]);
+
+
+
+  function subOptionLinkClick(e, item) {
+    console.log("e, item", e.preventDefault(), item, selectedOption.type)
+    e.preventDefault();
+
+    if (selectedOption.type == "static-route") {
+      setBreadCrumbList([{ label: item.label, link: item.path, order: 1 }]);
+    } else {
+      console.log("skjkasjkaj", item, selectedApp, selectedOption);
+      if (selectedApp?.name) {
+        setBreadCrumbList([{ label: item.label, link: item.path, order: 3 }, { label: selectedApp.name, link: subOptions[0].path, order: 2 }, { label: selectedOption.label, link: selectedOption.parent_path, order: 1 }])
+      } else {
+        setBreadCrumbList([{ label: item.label, link: item.path, order: 1 }])
+      }
+    }
+
+    history(item.path);
+  }
+  const toggleState = () => {
+    setShowDropdown(!showDropdown)
+  }
+
+  return (
+    <>
+      {selectedOption && selectedOption.key === "cluster" ?
+        <div className={additonalDrawer ? classes.additionalDrawer + "  text-e " + classes.additionalDrawerOpened : classes.additionalDrawer + " " + classes.additonalDrawerClosed} style={{ zIndex: "9990" }}>
+          <div className={additonalDrawer ? 'opacity-1 head-selector' : 'opacity-0 head-selector'} style={{ gap: 'var(--space-5)' }}>
+            <span className='font-11 font-weight-600 avtar color-nav'>{selectedOption ? selectedOption.label : "Welcome"}</span>
+            <div className={classes.subOptionsList}>
+              <div onClick={toggleState} className={'opt-label font-11 nowrap cursor-pointer'} role="button" tabIndex={0} onKeyDown={() => { }}>Kubernetes Cluster <span className={showDropdown ? 'font-18 ri-arrow-up-s-line d-block ml-auto' : 'font-18 ri-arrow-down-s-line d-block ml-auto'} role='button' tabIndex={0} onKeyDown={() => { }}></span></div>
+            </div>
+            {
+              showDropdown ?
+                <>
+                  {selectedOption && selectedOption.moreOptions ?
+                    <div className='selector' onClick={openMoreDialog} role='button' tabIndex={0} onKeyDown={() => { }}>
+                      <span className='font-11 font-weight-500 text-white text-ellipsis-110' style={{ width: "85%" }}>{selectedApp ? selectedApp.name : `Select Cluster`}</span>
+                      <span className='ri-arrow-right-s-line font-weight-500 text-white'></span>
+                    </div>
+                    : null}
+                  <div className='divider'></div>
+                  <div className={classes.subOptionsList}>
+
+                    {selectedOption && subOptions.map((ele, index) => {
+                      console.log("subububu", ele, selectedOption);
+                      let selected = isSelectedUrl(match, ele.path)
+                      return <>
+                        <Link to={ele.path} key={index} className="full-width" onClick={(e) => subOptionLinkClick(e, ele)}>
+                          <div className={selected ? 'opt-label font-11 selected-opt-label nowrap' : 'opt-label font-11 nowrap'}>{ele.label}</div>
+                        </Link>
+                      </>
+                    })}
+
+                  </div>
+                </>
+                : null
+            }
+            {staticSubOptions.length > 0 &&
+              <div className='divider'></div>
+            }
+            <div className={classes.subOptionsList}>
+              {staticSubOptions.map((ele, index) => {
+                let selected = isSelectedUrl(match, ele.path)
+                return (
+                  <Link to={ele.path} key={index} className="full-width" onClick={(e) => subOptionLinkClick(e, ele)}>
+                    <div className={selected ? 'opt-label font-11 selected-opt-label nowrap' : 'opt-label font-11 nowrap'}>{ele.label}</div>
+                  </Link>
+                )
+              })}
+            </div>
+
+          </div>
+          <div className={"chip"}>
+            <div className='toggleChip d-flex align-center justify-center' onClick={additonalDrawer ? handleAddtionalDrawerClose : handleAddtionalDrawerOpen} role='button' tabIndex={0} onKeyDown={() => { }}>
+              <span className='ri-arrow-right-s-line' style={{ fontSize: "var(--font-20)",transform: "rotate(180deg)" }}></span>
+            </div>
+          </div>
+        </div> :
+        <div className={additonalDrawer ? classes.additionalDrawer + " text-ellipsis " + classes.additionalDrawerOpened : classes.additionalDrawer + " " + classes.additonalDrawerClosed} style={{ zIndex: "9990" }}>
+          <div className={additonalDrawer ? 'opacity-1 head-selector' : 'opacity-0 head-selector'}>
+            <span className='font-11 font-weight-600 avtar color-nav'>{selectedOption ? selectedOption.label : "Welcome"}</span>
+            {selectedOption && selectedOption.moreOptions ?
+              <div className='selector' onClick={openMoreDialog} role='button' tabIndex={0} onKeyDown={() => { }}>
+                <span className='font-11 font-weight-500 text-white text-ellipsis-110' style={{ width: "85%" }}>{selectedApp ? selectedApp.name : `Select ${selectedOption.label}`}</span>
+                <span className='ri-arrow-right-s-line font-weight-500 text-white'></span>
+              </div>
+              : null}
+            <div className='divider'></div>
+            <div className={classes.subOptionsList}>
+
+              {selectedOption && subOptions.map((ele, index) => {  //Object.keys(selectedOption.subOptions)
+                console.log("subububu", ele, selectedOption);
+                //let option = selectedOption.subOptions[ele];
+                let selected = isSelectedUrl(match, ele.path)
+
+                return <>
+                    <Link to={ele.path} key={index} className="full-width" onClick={(e) => subOptionLinkClick(e, ele)}>
+                      <div className={selected ? 'opt-label font-11 selected-opt-label nowrap' : 'opt-label font-11 nowrap'}>{ele.label}</div>
+                    </Link>
+                </>
+
+
+              })}
+
+            </div>
+          </div>
+          <div className={"chip"}>
+            <div className='toggleChip d-flex align-center justify-center' onClick={additonalDrawer ? handleAddtionalDrawerClose : handleAddtionalDrawerOpen} role='button' tabIndex={0} onKeyDown={() => { }}>
+              <span className='ri-arrow-right-s-line font-20' style={{ transform: "rotate(180deg)" }}></span>
+            </div>
+          </div>
+        </div>
+      }
+    </>
+
+  );
+}
+
+const MoreOptionDialog = (props) => {
+  const classes = useStyles();
+  const open = props.open;
+  const onClose = props.onClose;
+  const selectedOption = props.selectedOption;
+  const moreOptions = props.moreOptions;
+  const onOptClick = props.onClick;
+  const selectedApp = props.selectedApp;
+  const [state, setState] = useState({
+    search: "",
+    AppClusList: moreOptions ? [...moreOptions] : [],
+  })
+  useEffect(() => {
+    console.log("is this called")
+    setState(prevState => ({
+      ...prevState,
+      AppClusList: moreOptions ? [...moreOptions] : [],
+    }));
+  }, [moreOptions]);
+
+  useEffect(() => {
+    console.log("is this called")
+    if (state.search !== '') {
+      console.log(state.search, 'ssdfdfdfdfdfddd')
+      const list = moreOptions;
+      const searchResults = list.filter(item => item.name.toLowerCase().includes(state.search));
+      setState(prevState => ({
+        ...prevState,
+        AppClusList: searchResults
+      }));
+    } else {
+      setState(prevState => ({
+        ...prevState,
+        AppClusList: moreOptions
+      }));
+    }
+  }, [state.search, moreOptions]);
+
+  const handleSearchData = (e) => {
+    const value = e.target.value;
+
+    setState(prevState => ({
+      ...prevState,
+      search: value
+    }))
+
+    console.log("jriejiewjw", e.target.value, state.search);
+  }
+  console.log("njsndjsna", selectedOption, moreOptions, selectedApp, state.AppClusList);
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      aria-labelledby="alert-dialog-title"
+      className="side-nav-dialog search-card-width"
+      aria-describedby="alert-dialog-description"
+    >
+      <div className={classes.third}>
+        <div className='top-head'>
+          <span className='font-11 font-weight-600 avtar color-key-00'>{selectedOption ? `Select ${selectedOption.label}` : "select"}</span>
+          <span className='ri-close-fill color-icon-secondary cursor-pointer font-20' onClick={onClose} role='button' tabIndex={0} onKeyDown={() => { }}></span>
+        </div>
+        {/* <div className='divider'></div> */}
+        <div className='search-container'>
+          <span className='ri-search-2-line font-20 light-grey'></span>
+          <input type='text'
+            placeholder={selectedOption ? `Select ${selectedOption.label}` : ""}
+            value={state?.search}
+            onChange={handleSearchData}
+            disabled={false}
+          />
+        </div>
+        <div className={classes.moreOptionsList}>
+          {selectedOption && selectedOption.moreOptions ?
+            state.AppClusList.length > 0 ?
+              state.AppClusList.map((ele, index) => {
+                return <div key={index} className={selectedApp && selectedApp.id == ele.id ? 'selected-more-option opt-label font-12 color-value font-weight-500' : 'opt-label font-12 color-value font-weight-500'} onClick={() => onOptClick(ele, selectedOption.subOptions)} tabIndex={0} role='button' onKeyDown={() => { }}>
+                  <Tooltip title={ele.name}>
+                    <span className='text-ellipsis-200'>{ele.name}</span>
+                  </Tooltip>
+                  {selectedApp && selectedApp.id == ele.id ? <span className='ri-checkbox-circle-fill font-20'></span> : null}
+                </div>
+
+
+              })
+              : <div className='d-flex align-center justify-center width-full'>No Result Found</div>
+
+            : null}
+        </div>
+
+      </div>
+
+    </Dialog>
+  )
+}
+
+
+const useStyles = makeStyles((theme) => ({
+  defaultMargin: {
+    marginLeft: "var(--sidebar-width-collapsed)",
+  },
+  additionalMargin: {
+    marginLeft: "calc(var(--sidebar-width-collapsed) + var(--sidebar-secondary-width))",
+  },
+  permanentNav: {
+    width: "var(--sidebar-width-collapsed)",
+  },
+  root: {
+    display: 'flex',
+  },
+  drawer: {
+    //width: incWidth? drawerWidth + additionalDrawerWidth : drawerWidth,
+    flexShrink: 0,
+  },
+  drawerPaper: {
+    //width: incWidth? drawerWidth + additionalDrawerWidth : drawerWidth,
+    //width: "var(--space-86)",
+    display: "flex",
+    flexDirection: "row!important",
+    //justifyContent: "flex-start",
+    backgroundColor: "var(--color-primary-700)!important",//"#1E3347",
+    border: "none",
+    overflow: "visible!important",
+    //position: "relative",
+    transition: "position 0.5s ease-in-out",
+
+  },
+  additionalDrawer: {
+    //width: "var(--space-170)",
+    background: "var(--color-primary-900)",//"#234361",
+    transition: "width 0.3s ease-in-out",
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "space-between",
+    '& .opacity-1': {
+      opacity: "1",
+    },
+    '& .opacity-0': {
+      opacity: "0",
+      transitionDuration: "0.0s !important",
+    },
+    '& .head-selector': {
+      display: "flex",
+      flexDirection: "column",
+      transition: "opacity 0.6s ease-in-out",
+      gap: "var(--space-12)",
+      '& .divider': {
+        height: "var(--space-1)",
+        background: "rgba(255, 255, 255, 0.20)",
+      },
+      '& .selector': {
+        display: "flex",
+        gap: "var(--space-8)",
+        border: "var(--space-1) solid rgba(255, 255, 255, 0.30)",//"var(--space-1) solid rgba(255, 255, 255, 0.3)",
+        borderRadius: "var(--radius-4)",
+        padding: "var(--space-8)",
+        alignItems: "center",
+        cursor: "pointer",
+        backgroundColor: "var(--color-grey-900)",
+        height: "var(--space-36)",
+      },
+    },
+    '& .chip': {
+      //position: "relative",
+      display: "flex",
+      justifyContent: "flex-end",
+
+      '& .toggleChip': {
+        width: "var(--space-23)",
+        height: "var(--space-52)",
+        borderRadius: "var(--radius-10) var(--radius-0) var(--radius-0) var(--radius-10)",
+        color: "var(--color-white)",
+        background: "var(--color-primary-700)",//"#1E3347",
+        marginRight: "calc(var(--space-15) * -1)",
+        // position: "absolute",
+        // left: "90%",
+        cursor: "pointer",
+        //bottom: "calc(var(--space-180) * -1)",
+        //transition: "left 0.5s ease-in-out",
+        //marginTop: "-40%",
+        '&:hover': {
+          background: "var(--color-tertiary-500)",
+        }
+      }
+    },
+  },
+  additonalDrawerClosed: {
+    width: "0",
+    //display: "none",
+    overflow: "hidden",
+  },
+  additionalDrawerOpened: {
+    width: "var(--sidebar-secondary-width)",
+    padding: "var(--space-12) var(--space-8) var(--space-16) var(--space-8)",
+  },
+
+  toggleChip: {
+    width: "var(--space-23)",
+    height: "var(--space-52)",
+    borderRadius: "var(--radius-10) var(--radius-0) var(--radius-0) var(--radius-10)",
+    color: "var(--color-white)",
+    background: "var(--color-primary-700)",//"#1E3347",
+    position: "absolute",
+    left: "100%",
+    cursor: "pointer",
+    //bottom: "calc(var(--space-180) * -1)",
+    // marginTop: "var(--space-160)",
+    //transition: "left 0.5s ease-in-out",
+    '&:hover': {
+      background: "var(--color-tertiary-500)",
+    }
+  },
+  third: {
+    display: "flex",
+    width: "100%",
+    height: "100%",
+    padding: "var(--space-12) var(--space-8) var(--space-16) var(--space-8)",
+    flexDirection: "column",
+    gap: "var(--space-12)",
+    '& .top-head': {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      alignSelf: "stretch",
+      borderBottom: "var(--space-1) solid rgba(0, 0, 0, 0.11)"
+    },
+    '& .divider': {
+      height: "var(--space-1)",
+      background: "rgba(0, 0, 0, 0.11)",
+    },
+    '& .search-container': {
+      display: "flex",
+      alignItems: "center",
+      gap: "var(--space-10)",
+      padding: "var(--space-6) var(--space-10)",
+      borderRadius: "var(--radius-6)",
+      border: "var(--space-1) solid var(--color-badge-grey-bg)",
+      background: "var(--color-grey-100)",
+      height: "var(--space-32)",
+      '& input': {
+        border: "none",
+        background: "transparent",
+        padding: 0,
+        '&::placeholder': {
+          fontSize: "var(--font-12)",
+          color: "var(--color-content-tertiary)",
+          fontWeight: "var(--font-weight-400)",
+        },
+        '&:focus': {
+          border: "none !important",
+          outline: "none !important",
+        }
+      }
+    }
+  },
+  // necessary for content to be below app bar
+  toolbar: theme.mixins.toolbar,
+  content: {
+    flexGrow: 1,
+    backgroundColor: theme.palette.background.default,
+    padding: theme.spacing(3),
+  },
+  itemBox: {
+    display: "flex",
+    width: "100%",
+    height: "var(--space-73)",
+    padding: "var(--space-10) var(--space-8)",
+    flexDirection: "column",
+    justifyContent: "center",
+    alignItems: "center",
+    //gap: "var(--space-5)",
+    background: "var(--color-primary-700)",//"#1E3347",
+    cursor: "pointer",
+    '& .nav-icon-img': {
+      color: "var(--color-grey-500)",
+    },
+    '&:hover': {
+      background: "var(--color-primary-900)",
+      '& .nav-icon': {
+        color: "var(--color-white) !important",
+      },
+      '& .nav-label': {
+        color: "var(--color-white) !important",
+      }
+    },
+    '@media screen and (max-width: 1440px)': {
+      height: "var(--space-73)",
+    },
+    '@media screen and (min-width: 1440px) and (max-width: 1920px)': {
+      height: "var(--space-77)",
+    },
+  },
+  selectedItemBox: {
+    background: "var(--color-primary-900) !important",//"#234361 !important",
+    borderLeft: "var(--space-4) solid var(--color-tertiary-500)",
+    '& .nav-icon': {
+      color: "var(--color-tertiary-500) !important",
+    },
+    '& .nav-label': {
+      color: "var(--color-white) !important",
+    },
+    '&:hover': {
+      background: "var(--color-primary-900) !important",//"#234361 !important",
+      '& .nav-icon': {
+        color: "var(--color-tertiary-500) !important",
+      },
+    }
+  },
+  subOptionsList: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: "var(--space-4)",
+    alignSelf: "stretch",
+    '& .opt-label': {
+      display: "flex",
+      padding: "var(--space-8)",
+      alignItems: "center",
+      gap: "var(--space-6)",
+      alignSelf: "stretch",
+      color: "var(--color-white)",
+      borderRadius: "var(--radius-6)",
+      //width: "100%",
+      "&:hover": {
+        backgroundColor: "var(--color-info-900)",
+        color: "var(--color-white)",
+      }
+    },
+    '& .selected-opt-label': {
+      color: "var(--color-white) !important",
+      background: "var(--color-tertiary-500) !important",
+      '&:hover': {
+        color: "var(--color-white) !important",
+        background: "var(--color-tertiary-500) !important",
+      }
+    }
+  },
+  moreOptionsList: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: "var(--space-4)",
+    alignSelf: "stretch",
+    '& .opt-label': {
+      display: "flex",
+      height: "var(--space-36)",
+      padding: "var(--space-8)",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: "var(--space-6)",
+      alignSelf: "stretch",
+      cursor: "pointer",
+      borderRadius: "var(--radius-4)",
+      '&:hover': {
+        backgroundColor: "var(--color-grey-100)",
+      }
+    },
+    '& .selected-more-option': {
+      backgroundColor: "var(--color-tertiary-500)",
+      color: "var(--color-white) !important",
+      '&:hover': {
+        backgroundColor: "var(--color-tertiary-500) !important",
+        color: "var(--color-white) !important",
+      }
+    }
+  },
+}));
