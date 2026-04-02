@@ -1,0 +1,809 @@
+import React, { useEffect, useState } from 'react'
+import { styled, Tooltip } from '@mui/material'
+import Pagination from '../../../../components/Pagination'
+import AvatarSquare from '../../../../components/genericComponents/AvatarSquare';
+import Button from '../../../../components/genericComponents/Button';
+import SearchDialog from './SearchDialog';
+import { Navigate, useNavigate } from 'react-router-dom';
+import GenerateURL, { GenerateSearchURL } from '../../../../util/APIUrlProvider';
+import properties from '../../../../properties/properties';
+import PaginationTwo from '../../../../components/PaginationTwo';
+import InvokeApi, { PostData } from '../../../../util/apiInvoker';
+import GenericSkeleton from '../../../../components/genericComponents/Skeletons/GenericSkeleton';
+import { PopoverDropdown } from '../../../releasePackage/listing/ReleasePackageIndex';
+import BlankPage from '../../../../components/BlankPage';
+import { useDocumentTitle } from '../../../../hooks/useDocumentTitle';
+import { useCustomSnackbar } from '../../../../contexts/SnackbarContext';
+
+const DeploymentsFreezeListing = () => {
+
+    const { showSnackbar } = useCustomSnackbar();
+    const [state, setState] = useState({
+        open_entities: [],
+        count: 0
+    })
+
+    useDocumentTitle("Freeze Window")
+
+    useEffect(() => {
+        fetchFreezeListing()
+    }, [])
+
+
+    function fetchFreezeListing(data) {
+        var requestInfo = {
+            endPoint: GenerateURL({}, properties.api.save_change_freeze),
+            httpMethod: "GET",
+            httpHeaders: { "Content-Type": "application/json" }
+        }
+        if (data) {
+            requestInfo.endPoint = GenerateSearchURL(data, requestInfo.endPoint);
+        }
+        setState((prevState) => ({ ...prevState, loadingFreezeList: true }))
+        InvokeApi(requestInfo, fetchFreezeListingSuccess, fetchFreezeListingFailed);
+    }
+
+    function fetchFreezeListingSuccess(data) {
+        const results = data?.results || [];
+
+        setState(prevState => ({
+            ...prevState,
+            count: data.count,
+            next: data.next ? properties.api.baseURL + data.next : null,
+            previous: data.previous ? properties.api.baseURL + data.previous : null,
+            page_start: prevState.page_start + data.results.length,
+            total_page: Math.ceil(Number(data.count / 10)),
+            curr_page: 1,
+            loadingFreezeList: false,
+            freeze_list: results,
+        }))
+    }
+
+    function fetchFreezeListingFailed(error) {
+        console.log(error)
+        setState((prevState) => ({ ...prevState, loadingFreezeList: false }))
+    }
+
+    function fetchFreezeListingNext(url) {
+        var requestInfo = {
+            endPoint: GenerateURL({}, properties.api.save_change_freeze),
+            httpMethod: "GET",
+            httpHeaders: { "Content-Type": "application/json" }
+        }
+        if (url) {
+            requestInfo.endPoint = url;
+        }
+        setState((prevState) => ({ ...prevState, loadingFreezeList: true }))
+        InvokeApi(requestInfo,
+            (data) => {
+                setState(prevState => ({
+                    ...prevState,
+                    count: data.count,
+                    next: data.next ? properties.api.baseURL + data.next : null,
+                    previous: data.previous ? properties.api.baseURL + data.previous : null,
+                    total_page: Math.ceil(Number(data.count / 10)),
+                    curr_page: Number(prevState.curr_page + 1),
+                    freeze_list: data?.results || [],
+                    loadingFreezeList: false
+                }))
+                // setShowLoading(false);
+            }, fetchFreezeListingFailed);
+
+    }
+
+    function fetchFreezeListingPrev(url) {
+        var requestInfo = {
+            endPoint: GenerateURL({}, properties.api.save_change_freeze),
+            httpMethod: "GET",
+            httpHeaders: { "Content-Type": "application/json" }
+        }
+        if (url) {
+            requestInfo.endPoint = url;
+        }
+        setState((prevState) => ({ ...prevState, loadingFreezeList: true }))
+        InvokeApi(requestInfo,
+            (data) => {
+                setState(prevState => ({
+                    ...prevState,
+                    count: data.count,
+                    next: data.next ? properties.api.baseURL + data.next : null,
+                    previous: data.previous ? properties.api.baseURL + data.previous : null,
+                    total_page: Math.ceil(Number(data.count / 10)),
+                    curr_page: Number(prevState.curr_page - 1),
+                    freeze_list: data?.results || [],
+                    loadingFreezeList: false
+                }))
+                // setShowLoading(false);
+            }, fetchFreezeListingFailed);
+
+    }
+
+    function fetchFreezeListingPage(enteredPageNumber) {
+        var requestInfo = {
+            endPoint: GenerateURL({ }, properties.api.save_change_freeze),
+            httpMethod: "GET",
+            httpHeaders: { "Content-Type": "application/json" }
+        }
+        if (enteredPageNumber > 1) {
+            requestInfo.endPoint =
+                requestInfo.endPoint +
+                "?limit=10&offset=" +
+                (enteredPageNumber - 1) * 10;
+        }
+        setState((prevState) => ({ ...prevState, loadingFreezeList: true }))
+        InvokeApi(requestInfo,
+            (data) => {
+                setState(prevState => ({
+                    ...prevState,
+                    count: data.count,
+                    next: data.next ? properties.api.baseURL + data.next : null,
+                    previous: data.previous ? properties.api.baseURL + data.previous : null,
+                    total_page: Math.ceil(Number(data.count / 10)),
+                    curr_page: Number(enteredPageNumber),
+                    freeze_list: data?.results || [],
+                    loadingFreezeList: false
+                }));
+                // setShowLoading(false);
+            }, fetchFreezeListingFailed);
+
+    }
+
+    const handleAddChangeFreeze = () => {
+        setState((new_state) => ({
+            ...new_state,
+            redirect_to_add: true
+        }))
+    }
+
+    const freezeList = [
+        {
+            "name": "test1",
+            "start_date": "2025-05-22",
+            "application": [1],
+            "service_exclusion": null,
+            "environment_master": [1],
+            "project_environment": [1],
+            "entities": { "1": { "environment_master": [1], "project_environment": [1, 2, 3], "service": [1, 2, 3, 4, 5] } },
+            "start_time": "12:00:00",
+            "end_time": "20:00:00",
+            "end_date": "2025-05-23",
+            "days": "Mon,Tue,Thu"
+        },
+        {
+            "name": "test2",
+            "start_date": "2025-05-22",
+            "application": [1],
+            "service_exclusion": null,
+            "environment_master": [1],
+            "project_environment": [1],
+            "entities": { "1": { "environment_master": [1], "project_environment": [1], "service": [1, 2, 3, 4, 5] }, "2": { "environment_master": [1, 2], "project_environment": [1], "service": [7, 8] } },
+            "start_time": "12:00:00",
+            "end_time": "20:00:00",
+            "end_date": "2025-05-23",
+            "days": "Mon,Tue,Thu"
+        },
+        {
+            "name": "test3",
+            "start_date": "2025-05-22",
+            "application": [1],
+            "service_exclusion": null,
+            "environment_master": [1],
+            "project_environment": [1],
+            "entities": { "1": { "environment_master": [1], "project_environment": [1], "service": [1] } },
+            "start_time": "12:00:00",
+            "end_time": "20:00:00",
+            "end_date": "2025-05-23",
+            "days": "Mon,Tue,Thu"
+        },
+        {
+            "name": "test1",
+            "start_date": "2025-05-22",
+            "application": [1],
+            "service_exclusion": null,
+            "environment_master": [1],
+            "project_environment": [1],
+            "entities": { "1": { "environment_master": [1], "project_environment": [1], "service": [1] } },
+            "start_time": "12:00:00",
+            "end_time": "20:00:00",
+            "end_date": "2025-05-23",
+            "days": null
+        }
+    ]
+
+    function formatFreezeWindow(start_date, start_time, end_date, end_time) {
+        // Combine date and time into ISO strings
+        const start = new Date(`${start_date}T${start_time}`);
+        const end = new Date(`${end_date}T${end_time}`);
+
+        // Helper to format date and time
+        const formatDate = (date) => {
+            const day = date.getDate();
+            const month = date.toLocaleString('en-US', { month: 'short' });
+            const year = date.getFullYear();
+            let hours = date.getHours();
+            const minutes = date.getMinutes();
+            const ampm = hours >= 12 ? 'pm' : 'am';
+            hours = hours % 12;
+            hours = hours ? hours : 12; // 0 should be 12
+            const minStr = minutes < 10 ? `0${minutes}` : minutes;
+            return `${day} ${month} ${year}, ${hours}:${minStr} ${ampm}`;
+        };
+
+        return `${formatDate(start)} - ${formatDate(end)}`;
+    }
+
+    function formatTimeRange(start_time, end_time) {
+        const formatTime = (timeStr) => {
+            const [hour, minute] = timeStr.split(':');
+            let h = parseInt(hour, 10);
+            const m = minute;
+            const ampm = h >= 12 ? 'pm' : 'am';
+            h = h % 12;
+            h = h ? h : 12; // 0 should be 12
+            return `${h}:${m} ${ampm}`;
+        };
+        return `${formatTime(start_time)}- ${formatTime(end_time)}`;
+    }
+
+    function formatDateRange(start_date, end_date) {
+        const formatDate = (dateStr) => {
+            const date = new Date(dateStr);
+            const day = date.getDate();
+            const month = date.toLocaleString('en-US', { month: 'short' });
+            const year = date.getFullYear();
+            return `${day} ${month} ${year}`;
+        };
+
+        const formattedStartDate = formatDate(start_date);
+        return end_date ?
+            `${formattedStartDate} - ${formatDate(end_date)}` :
+            `${formattedStartDate} - Ends Never`;
+    }
+
+    function ValidateAndApproveFreeze(id) {
+        showSnackbar("info", "Processing freeze window approval...");
+        setState((new_state) => ({
+            ...new_state,
+            approval_in_progress: id
+        }))
+        PostData(GenerateURL({ freeze_id: id }, properties.api.approve_change_freeze), {}, freezeApproveSuccess, freezeApproveFailed);
+    }
+
+    function freezeApproveSuccess(response) {
+        showSnackbar("success", "Freeze window approved successfully.");
+        console.log(response, "abdasgcvdsghvchsd")
+        setState((new_state) => ({
+            ...new_state,
+            approval_in_progress: null,
+        }))
+        fetchFreezeListing();
+    }
+
+    function freezeApproveFailed(error) {
+        showSnackbar("error", "Failed to approve freeze window. Please try again.");
+        console.log(error, "abdasgcvdsghvchsd")
+        setState((new_state) => ({
+            ...new_state,
+            approval_in_progress: null
+        }))
+    }
+
+    function handleAddToOpenEntities(entity) {
+        setState((new_state) => ({
+            ...new_state,
+            open_entities: [...new_state.open_entities, entity]
+        }))
+    }
+
+    function handleRemoveFromOpenEntities(entity) {
+        let updated_list = [];
+        state.open_entities.forEach((item) => {
+            if (item !== entity) {
+                updated_list.push(item)
+            }
+        })
+
+        setState((new_state) => ({
+            ...new_state,
+            open_entities: updated_list
+        }))
+    }
+
+    function getApplicationCount(data) {
+        let list = Object.keys(data);
+
+        return list.length
+    }
+
+    function getMasterEnvsCount(data) {
+        let app_ids = Object.keys(data)
+
+        let master_envs_count = 0;
+
+        app_ids.forEach((id) => {
+            master_envs_count = master_envs_count + data[id].environment_master.length
+        })
+
+        return master_envs_count;
+    }
+
+    function getProjectEnvsCount(data) {
+        let app_ids = Object.keys(data)
+
+        let project_envs_count = 0;
+
+        app_ids.forEach((id) => {
+            if (data[id]?.project_environment) {
+                project_envs_count = project_envs_count + data[id].project_environment.length
+            }
+        })
+
+        if (project_envs_count === 0) return 'All';
+        return project_envs_count;
+    }
+
+    function getTotalServiceCount(data) {
+        let app_ids = Object.keys(data)
+
+        let service_count = 0;
+
+        app_ids.forEach((id) => {
+            if (data[id]?.service) {
+                service_count = service_count + data[id].service.length
+            }
+        })
+
+        if (service_count === 0) return 'All';
+        return service_count;
+    }
+
+    function handleOpenBrowseDialog(tabOrder, id) {
+        setState((new_state) => ({
+            ...new_state,
+            openSearchDialog: true,
+            tabOrder: tabOrder,
+            selected_item_id: id
+        }))
+    }
+
+    function handleCloseDialog() {
+        setState((new_state) => ({
+            ...new_state,
+            openSearchDialog: false,
+        }))
+    }
+
+    function onFreezeSelectEdit(id) {
+        setState((new_state) => ({
+            ...new_state,
+            editFreeze: true,
+            editFreezeId: id
+        }))
+    }
+
+    function handleToggleFreezeState(freezeId) {
+        setState((prevState) => ({
+            ...prevState,
+            freeze_list: (prevState.freeze_list || []).map((freezeItem) =>
+                freezeItem.id === freezeId
+                    ? {
+                        ...freezeItem,
+                        state: freezeItem.state === "ACTIVE" ? "INACTIVE" : "ACTIVE",
+                    }
+                    : freezeItem
+            ),
+        }));
+    }
+
+    function renderFreezeToggle(item) {
+        const isActive = item.state === "ACTIVE";
+
+        return (
+            <button
+                type="button"
+                className={`toggle-switch ${isActive ? "on" : "off"}`}
+                role="switch"
+                aria-checked={isActive}
+                aria-label={`${item?.name || "Freeze window"} is ${isActive ? "active" : "inactive"}`}
+                onClick={(e) => {
+                    e.stopPropagation();
+                    handleToggleFreezeState(item.id);
+                }}
+            >
+                <span className="toggle-switch-label">{isActive ? "ON" : "OFF"}</span>
+                <span className="toggle-switch-thumb" />
+            </button>
+        );
+    }
+
+    if (state.editFreeze) {
+        return <Navigate to={`/change-freeze/${state.editFreezeId}/edit`} replace />;
+    }
+
+    if (state.redirect_to_add) {
+        return <Navigate to="/change-freeze/add" replace />;
+    }
+
+    const SKELETON_COUNT = 10;
+    const skeletonArray = Array(SKELETON_COUNT).fill(null);
+
+    return (
+        <>
+            {
+                state.openSearchDialog &&
+                <SearchDialog
+                    open={state.openSearchDialog}
+                    selectedTabOrder={state.tabOrder}
+                    handleCloseDialog={handleCloseDialog}
+                    selected_item_id={state.selected_item_id}
+                />
+            }
+            <DeploymentsFreezeListView>
+                <div className='header'>
+                    <div className='left-part'>
+                        <div className='icon-div'>
+                            <span className='ri-pause-circle-line' style={{ color: "var(--color-tertiary-500)", fontSize: "var(--font-24)" }}></span>
+                        </div>
+                        <div className='header-detail'>
+                            <span style={{ fontFamily: "Montserrat", fontSize: "var(--font-18)", fontWeight: "var(--font-weight-600)", lineHeight: 'var(--line-height-21-94)', color: "var(--color-content-primary)" }}>Freeze Window</span>
+                            <Tooltip title="Change Freeze in BuildPiper allows teams to temporarily restrict actions or modifications across selected entities within the platform. ">
+                                <span className='ri-information-line' style={{ marginLeft: "var(--space-8)", fontSize: "var(--font-20)", color: "var(--color-content-secondary)", cursor: "pointer" }}></span>
+                            </Tooltip>
+                        </div>
+                    </div>
+                    <div className='right-part'>
+                        <button className='btn btn-primary' onClick={handleAddChangeFreeze}><span className='ri-add-line' style={{ marginRight: "var(--space-4)" }}></span>CREATE</button>
+                    </div>
+                </div>
+                <div className="listing-content">
+                    {
+                        state.loadingFreezeList ?
+                            <>
+                                {skeletonArray.map((_, index) => (
+                                    <GenericSkeleton
+                                        key={`skeleton-${index}`}
+                                        variant='rect'
+                                        width='100%'
+                                        height="var(--space-115)"
+                                        style={{
+                                            borderRadius: 'var(--radius-6)',
+                                            marginBottom: index !== SKELETON_COUNT - 1 ? '16px' : '0'
+                                        }}
+                                    />
+                                ))}
+                            </>
+                            :
+                            state.freeze_list && state.freeze_list.length > 0 ?
+                                state.freeze_list.map((item, index) => {
+                                    console.log(item, index, "bsvcshdbhsdbf")
+                                    return (
+                                        <div className='change-freeze-card' style={index !== 0 ? { marginTop: "var(--space-16)" } : {}}>
+                                            <div className='top-part'>
+                                                <div className='left-part'>
+                                                    <AvatarSquare name={item.name} varient="double" />
+                                                    <div className='d-flex f-direction-column' style={{ gap: 'var(--space-4)' }}>
+                                                        <div style={{ display: "flex", alignItems: 'center' }}>
+                                                            <span style={{ fontFamily: "Montserrat", fontWeight: "var(--font-weight-600)", fontSize: "var(--font-14)", color: "var(--color-content-primary)" }}>{item.name}</span>
+                                                            {
+                                                                (item.state == "ACTIVE") &&
+                                                                <div style={{ backgroundColor: "var(--color-pastel-green)", border: "var(--space-1) solid var(--color-pastel-green)", borderRadius: "var(--radius-4)", padding: "var(--space-2) var(--space-8)", fontWeight: "var(--font-weight-600)", fontSize: "var(--font-12)", marginLeft: "var(--space-8)", color: "var(--color-success-500)" }}>Active</div>
+                                                            }
+                                                            {
+                                                                item.status == "APPROVED" &&
+                                                                <div style={{ backgroundColor: "var(--color-pastel-blue-3)", border: "var(--space-1) solid var(--color-badge-blue-bg)", borderRadius: "var(--radius-4)", padding: "var(--space-2) var(--space-8)", fontWeight: "var(--font-weight-600)", fontSize: "var(--font-12)", marginLeft: "var(--space-8)", color: "var(--color-tertiary-500)" }}>Approved</div>
+                                                            }
+                                                        </div>
+                                                        <div style={{ display: "flex", alignItems: "center", gap: "var(--space-10)" }}>
+                                                            <span className="data-type1">Type:<span style={{ fontWeight: "var(--font-weight-500)" }}>{item.days ? ` Repeat, ${formatTimeRange(item.start_time, item.end_time)}` : " One-time"}</span></span>
+                                                            <div style={{ height: "var(--space-4)", width: "var(--space-4)", borderRadius: "var(--radius-full)", backgroundColor: "var(--color-grey-400)" }}></div>
+                                                            {
+                                                                item.days && item.days.length > 0 ?
+                                                                    <span>{item.days.map((day, idx, arr) => (
+                                                                        <span key={day} style={{ marginRight: idx !== arr.length - 1 ? '7px' : '0' }} className="data-type1">
+                                                                            {day}
+                                                                        </span>
+                                                                    ))}</span>
+                                                                    :
+                                                                    <span className='data-type1'>{formatFreezeWindow(item.start_date, item.start_time, item.end_date, item.end_time)}</span>
+                                                            }
+                                                            {
+                                                                item.days &&
+                                                                <>
+                                                                    <div style={{ height: "var(--space-4)", width: "var(--space-4)", borderRadius: "var(--radius-full)", backgroundColor: "var(--color-grey-400)" }}></div>
+                                                                    <span className='data-type1'>
+                                                                        {formatDateRange(item.start_date, item.end_date)}
+                                                                    </span>
+                                                                </>
+
+                                                            }
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                {
+                                                    item.status == "APPROVAL_PENDING" ?
+                                                        <div className='right-part' style={{ display: "flex", alignItems: "center",gap:'var(--space-8)' }}>
+                                                            <Button
+                                                            className='btn'
+                                                                isLoading={state.approval_in_progress === item.id}
+                                                                onClick={() => ValidateAndApproveFreeze(item.id)}
+                                                                height={32}
+                                                            >
+                                                                APPROVE
+                                                            </Button>
+                                                            <div>
+                                                                <PopoverDropdown variant="change_freeze" name={"Change Freeze"} id={item.id} isEditable={true} handleRefresh={() => fetchFreezeListing()} onDatabaseSelect={onFreezeSelectEdit} />
+                                                            </div>
+                                                        </div>
+                                                        :
+                                                        <div className='right-part' style={{ display: "flex", alignItems: "center", gap: 'var(--space-8)' }}>
+                                                           {item.status === "APPROVED" ? renderFreezeToggle(item) : null}
+                                                        <div>
+                                                            <PopoverDropdown variant="change_freeze" name={"Change Freeze"} id={item.id} isEditable={true} handleRefresh={() => fetchFreezeListing()} onDatabaseSelect={onFreezeSelectEdit} />
+                                                        </div>
+                                                        </div>
+                                                }
+
+                                            </div>
+                                            {
+                                                state.open_entities.includes(item.name) ?
+                                                    <>
+                                                        <div className='bottom-part' onClick={() => handleRemoveFromOpenEntities(item.name)} style={{ cursor: "pointer", backgroundColor: "var(--color-grey-000)" }} role='button' tabIndex={0} onKeyDown={() => { }}>
+                                                            <div style={{ display: "flex", alignItems: "center" }}>
+                                                                <span className='data-type1' style={{ fontWeight: "var(--font-weight-500)", color: "var(--color-content-secondary)" }}>View Freezing Details</span>
+                                                                {
+                                                                    item.requested_by?.name ?
+                                                                        <>
+                                                                            <div style={{ height: "var(--space-4)", width: "var(--space-4)", borderRadius: "var(--radius-full)", backgroundColor: "var(--color-grey-400)", margin: "0 var(--space-12)" }}></div>
+                                                                            <span className='data-type1'>Requested by:&nbsp;<span className='font-weight-500' style={{ color: "var(--color-content-primary)" }}>{item.requested_by?.name}</span></span>
+                                                                        </>
+                                                                        :
+                                                                        <></>
+                                                                }
+                                                                {
+                                                                    item.approved_by?.name ?
+                                                                        <>
+                                                                            <div style={{ height: "var(--space-4)", width: "var(--space-4)", borderRadius: "var(--radius-full)", backgroundColor: "var(--color-grey-400)", margin: "0 var(--space-12)" }}></div>
+                                                                            <span className='data-type1'>Approved by:&nbsp;<span className='font-weight-500' style={{ color: "var(--color-content-primary)" }}>{item.approved_by?.name}</span></span>
+                                                                        </>
+                                                                        :
+                                                                        <></>
+                                                                }
+                                                            </div>
+                                                            <span className='ri-arrow-up-s-line line-height-normal' style={{ fontSize: "var(--font-20)" }}></span>
+                                                        </div>
+                                                        {
+                                                            item.entities && (item.entities.release_package && item.entities.release_package.length > 0) ?
+                                                                <>
+                                                                    <div className='bottom-part-info' style={{ borderTop: "var(--space-1) solid #E6E6E6", }}>
+                                                                        <div className='single-div' style={{ borderRight: "var(--space-1) solid #E6E6E6", cursor: "pointer",  maxWidth:'var(--space-225)' }} onClick={() => handleOpenBrowseDialog(1, item.id)} role='button' tabIndex={0} onKeyDown={() => { }}>
+                                                                            <span>{item.entities.release_package.length}</span>
+                                                                            <span className='data-type1'>Release Package</span>
+                                                                        </div>
+                                                                    </div>
+</>
+                                                                    :
+                                                                    <div className='bottom-part-info' style={{ borderTop: "var(--space-1) solid #E6E6E6" }}>
+                                                                        <div className='single-div' style={{ borderRight: "var(--space-1) solid #E6E6E6", cursor: "pointer" }} onClick={() => handleOpenBrowseDialog(1, item.id)} role='button' tabIndex={0} onKeyDown={() => { }}>
+                                                                            <span>{getApplicationCount(item.entities)}</span>
+                                                                            <span className='data-type1'>Applications</span>
+                                                                        </div>
+                                                                        <div className='single-div' style={{ borderRight: "var(--space-1) solid #E6E6E6", cursor: "pointer" }} onClick={() => handleOpenBrowseDialog(2, item.id)} role='button' tabIndex={0} onKeyDown={() => { }}>
+                                                                            <span>{getMasterEnvsCount(item.entities)}</span>
+                                                                            <span className='data-type1'>Master Environment</span>
+                                                                        </div>
+                                                                        <div className='single-div' style={{ borderRight: "var(--space-1) solid #E6E6E6", cursor: "pointer" }} onClick={() => handleOpenBrowseDialog(3, item.id)} role='button' tabIndex={0} onKeyDown={() => { }}>
+                                                                            <span>{getProjectEnvsCount(item.entities)}</span>
+                                                                            <span className='data-type1'>Project environment</span>
+                                                                        </div>
+                                                                        <div className='single-div' style={{ cursor: "pointer" }} onClick={() => handleOpenBrowseDialog(4, item.id)} role='button' tabIndex={0} onKeyDown={() => { }}>
+                                                                            <span>{getTotalServiceCount(item.entities)}</span>
+                                                                            <span className='data-type1'>Services</span>
+                                                                        </div>
+                                                                    </div>
+                                                             
+
+                                                        }
+                                                    </>
+                                                    :
+                                                    <div className='bottom-part' onClick={() => handleAddToOpenEntities(item.name)} style={{ cursor: "pointer" }} role='button' tabIndex={0} onKeyDown={() => { }}>
+                                                        <span className='data-type1' style={{ fontWeight: "var(--font-weight-500)", color: "var(--color-content-secondary)" }}>View Freezing Details</span>
+                                                        <span className='ri-arrow-down-s-line line-height-normal' style={{ fontSize: "var(--font-20)" }}></span>
+                                                    </div>
+                                            }
+                                        </div>
+                                    )
+                                })
+                                :
+                                <BlankPage
+                                    pageIcon={<span className='ri-apps-line font-28 text-anchor-blue'></span>}
+                                    text={"You have no change freeze added"}
+                                    primaryButton={
+                                        {
+                                            actionType: 'link',
+                                            action: "/change-freeze/add",
+                                            icon: <span className="ri-add-line font-14"></span>,
+                                            text: 'Create',
+                                            buttonClass: 'btn-primary m-auto'
+                                        }
+                                    }
+                                    type="deployment-freeze"
+                                />
+                    }
+                </div>
+                {
+                    state.freeze_list && state.freeze_list.length > 0 &&
+                    <div className="pagination-container">
+                        <PaginationTwo
+                            current_page_count={state.curr_page}
+                            total_count={state.total_page}
+                            count={state.count}
+                            next={state.next}
+                            previous={state.previous}
+                            on_previous_click={() => {
+                                fetchFreezeListingPrev(state.previous)
+                            }}
+                            on_next_click={() => {
+                                fetchFreezeListingNext(state.next);
+                            }}
+                            on_pageNumber_click={(pageNumber) => {
+                                fetchFreezeListingPage(pageNumber);
+                            }}
+                        />
+                    </div>
+
+                }
+            </DeploymentsFreezeListView>
+        </>
+    )
+}
+
+const DeploymentsFreezeListView = styled("div")({
+    padding: "var(--space-20)",
+    width: "100%",
+    display: "flex",
+    flexDirection: "column",
+    gap: "var(--space-16)",
+    backgroundColor: "var(--color-white)",
+    minHeight: "100vh",
+    position: "relative",
+    fontFamily: "Montserrat",
+
+    "& .listing-content": {  // Add this new class
+        flex: 1,
+        marginTop: "var(--space-29)",
+    },
+
+    "& .pagination-container": {  // Add this new class
+        marginTop: "auto",
+        padding: "var(--space-20) 0",
+        backgroundColor: "var(--color-white)",
+    },
+
+    "& .header": {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+
+        "& .left-part": {
+            display: "flex",
+            alignItems: "center",
+            gap: "var(--space-16)",
+
+            "& .icon-div": {
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: "var(--color-pastel-blue-2)",
+                height: "var(--space-56)",
+                width: "var(--space-56)",
+                borderRadius: "var(--radius-8)",
+            }
+        },
+    },
+
+    "& .change-freeze-card": {
+        border: "var(--space-1) solid var(--color-badge-grey-bg)",
+        borderRadius: "var(--radius-6)",
+        boxShadow: "var(--space-0) var(--space-1) var(--space-4) rgba(0, 0, 0, 0.06)",
+
+        "& .data-type1": {
+            fontFamily: "Montserrat",
+            fontWeight: "var(--font-weight-400)",
+            fontSize: "var(--font-12)",
+            color: "var(--color-content-secondary)"
+        },
+
+        "& .top-part": {
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "var(--space-12)",
+
+            "& .left-part": {
+                display: "flex",
+                alignItems: "center",
+                gap: "var(--space-16)",
+            }
+        },
+
+        "& .bottom-part": {
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "var(--space-6) var(--space-12)",
+            borderTop: "var(--space-1) solid #E6E6E6",
+        },
+
+        "& .bottom-part-info": {
+            display: "grid",
+            gridTemplateColumns: "auto auto auto auto",
+
+            "& .single-div": {
+                borderRight: "var(--space-1) solid #E6E6E6",
+                padding: "var(--space-10) var(--space-12)",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "flex-start"
+            }
+        }
+    },
+    "& .toggle-switch": {
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "flex-start",
+        width: "var(--space-44)",
+        height: "var(--space-24)",
+        border: "none",
+        borderRadius: "var(--radius-30)",
+        padding: "var(--space-2)",
+        position: "relative",
+        cursor: "pointer",
+        transition: "background-color 0.2s ease",
+        fontFamily: "Montserrat",
+        outline: "none",
+        boxSizing: "border-box",
+
+        "& .toggle-switch-label": {
+            fontSize: "var(--font-8)",
+            fontWeight: "var(--font-weight-700)",
+            lineHeight: "1",
+            position: "absolute",
+            zIndex: 1,
+            transition: "all 0.2s ease",
+            userSelect: "none",
+            textTransform: "bold",
+        },
+
+        "& .toggle-switch-thumb": {
+            width: "var(--space-20)",
+            height: "var(--space-20)",
+            borderRadius: "var(--radius-full)",
+            backgroundColor: "var(--color-white)",
+            boxShadow: "0 var(--space-1) var(--space-3) rgba(0,0,0,0.2)",
+            transform: "translateX(0)",
+            transition: "transform 0.2s ease",
+        },
+
+        "&.on": {
+            backgroundColor: "var(--color-tertiary-500)",
+            "& .toggle-switch-label": {
+                left: "var(--space-6)",
+                color: "var(--color-white)",
+            },
+            "& .toggle-switch-thumb": {
+                transform: "translateX(var(--space-22))",
+            },
+        },
+
+        "&.off": {
+            backgroundColor: "var(--color-grey-200)",
+            "& .toggle-switch-label": {
+                right: "var(--space-5)",
+                color: "var(--color-grey-400)",
+            },
+        },
+    },
+
+})
+
+export default DeploymentsFreezeListing
