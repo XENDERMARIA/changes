@@ -1,0 +1,1664 @@
+import React, { useEffect, useState } from "react";
+import { useWindowDimensions } from "../../loadBalancer/addLoadBalancer/AddLoadBalancer";
+import { Grid, styled, Tooltip } from "@mui/material";
+import { getCommonFunctions } from "../../../serviceRevamp/add/ci_flow/SourceDetails";
+import { Input } from "../../../../components/genericComponents/Input";
+import { Navigate, useParams } from "react-router-dom";
+import properties from "../../../../properties/properties";
+import InvokeApi, { PostData } from "../../../../util/apiInvoker";
+import GenerateURL from "../../../../util/APIUrlProvider";
+import { CustomLabel } from "../../../releasePackage/add/manualAdd/components/ConfigureChangeSet";
+import { StyledRadio } from "../../../releasePackage/add/manualAdd/components/StylesRadio";
+import { AddFormSkeleton } from "../../../releasePackage/add/manualAdd/components/ReleasePackageAddForm";
+import {
+    ValidateDataSet,
+    VALIDATION_TYPE_REQUIRED,
+} from "../../../../util/Validator";
+import { useCustomSnackbar } from "../../../../contexts/SnackbarContext";
+import { convertList, showErrorHandlerUpdated } from "../../../../util/util";
+import AlertStrip from "../../../../components/AlertStrips";
+import TimeZoneList from "../../../../components/genericComponents/TimeZoneList";
+import { useDocumentTitle } from "../../../../hooks/useDocumentTitle";
+
+const AddChangeFreeze = (props) => {
+    const [state, setState] = useState({
+        days_list: [
+            { id: "Sunday", label: "S" },
+            { id: "Monday", label: "M" },
+            { id: "Tuesday", label: "T" },
+            { id: "Wednesday", label: "W" },
+            { id: "Thursday", label: "T" },
+            { id: "Friday", label: "F" },
+            { id: "Saturday", label: "S" },
+        ],
+        selected_days: [],
+        edit_start_date: false,
+        edit_end_date: false,
+        enable_master_env_input: false,
+        enable_project_env_input: false,
+        enable_service_input: false,
+        disable_input: false,
+        redirect_to_list: false,
+        data_loading: true,
+        error_loading_data: null,
+        application_list: [],
+        environment_master_list: [],
+        project_env_list: [],
+        service_list: [],
+        env_data_map: {},
+        data: {
+            freeze_type: "Onetime Continuous",
+            days_type: "Weekdays",
+            entity_type: "micro_service",
+            entity_action: "deploy",
+            applications: [],
+            master_env: [],
+            project_envs: [],
+            service: [],
+        },
+        error: {},
+    });
+
+    const { height, width } = useWindowDimensions();
+    const inherits = props.inherits ? props.inherits : {};
+    const commonFunctions = getCommonFunctions(state, setState, inherits);
+    const { freeze_id } = useParams();
+    const { showSnackbar } = useCustomSnackbar();
+    const timezoneList = TimeZoneList.timeZoneList;
+    const optionList = [
+        {
+            label: "Onetime Continuous",
+            value: "Onetime Continuous",
+            info: "One-time Continuous Freeze: A business-approved freeze for a specific duration, typically for special occasions like a Christmas freeze.",
+        },
+        {
+            label: "Repeating & Window based",
+            value: "Repeating & Window based",
+            info: "Recurring Window-Based Freeze: A recurring freeze window, such as every Friday or on weekends, during which selected actions or modifications across entities are restricted.",
+        },
+    ];
+
+    useDocumentTitle("Create Freeze Window");
+
+    useEffect(() => {
+        getApplicationList();
+    }, []);
+
+    useEffect(() => {
+        if (freeze_id && state.application_list && state.application_list.length > 0) {
+            fetchFreezeDetails();
+        }
+    }, [freeze_id, state.application_list]);
+
+    useEffect(() => {
+        getMasterEnvsOfChosenApplication();
+    }, [state.data.applications]);
+
+    function getMasterEnvsOfChosenApplication() {
+        if (state.data.applications && state.data.applications.length === 1) {
+            fetchEnvironmentsData(state.data.applications[0]);
+            setState((new_state) => ({
+                ...new_state,
+                data: {
+                    ...new_state.data,
+                    service: [],
+                    master_env: [],
+                    project_envs: [],
+                },
+            }));
+        } else if (state.data.applications && state.data.applications.length > 1) {
+            setState((new_state) => ({
+                ...new_state,
+                enable_master_env_input: true,
+                enable_service_input: false,
+                enable_project_env_input: false,
+                data_loading: false,
+                data: {
+                    ...new_state.data,
+                    service: [],
+                    project_envs: [],
+                    master_env: new_state.selected_master_env_list && new_state.selected_master_env_list.length > 0
+                        ? new_state.selected_master_env_list
+                        : [],
+                },
+            }));
+        } else {
+            setState((new_state) => ({
+                ...new_state,
+                enable_master_env_input: false,
+                enable_service_input: false,
+                enable_project_env_input: false,
+                data_loading: false,
+                data: {
+                    ...new_state.data,
+                    service: [],
+                    master_env: [],
+                    project_envs: [],
+                },
+            }));
+        }
+    }
+
+    useEffect(() => {
+        if (
+            state.data.master_env &&
+            state.data.master_env.length === 1 &&
+            state.env_data_map &&
+            typeof state.env_data_map === "object"
+        ) {
+            setState((new_state) => ({
+                ...new_state,
+                enable_project_env_input: state.data.applications.length > 1 ? false : true,
+                project_env_list: getProjectEnvList(state.data.master_env[0]),
+                data_loading: false,
+                data: {
+                    ...new_state.data,
+                    project_envs: new_state.selected_project_envs || [],
+                },
+            }));
+        } else if (state.data.master_env && state.data.master_env.length > 1) {
+            setState((new_state) => ({
+                ...new_state,
+                enable_project_env_input: false,
+                data_loading: false,
+                data: {
+                    ...new_state.data,
+                    project_envs: [],
+                    service: [],
+                },
+            }));
+        } else {
+            setState((new_state) => ({
+                ...new_state,
+                enable_project_env_input: false,
+                data_loading: false,
+                data: {
+                    ...new_state.data,
+                    project_envs: [],
+                    service: [],
+                },
+            }));
+        }
+    }, [state.data.master_env, state.env_data_map]);
+
+    useEffect(() => {
+        if (state.data.project_envs && state.data.project_envs.length === 1) {
+            let env_master = state.data.master_env && state.data.master_env[0];
+
+            // Only call getServiceList if we have valid env_master and env_data_map
+            if (env_master && state.env_data_map && state.env_data_map[env_master]) {
+                getServiceList(env_master, state.data.project_envs[0]);
+                setState((new_state) => ({
+                    ...new_state,
+                    enable_service_input: true,
+                    data: {
+                        ...new_state.data,
+                        service: new_state.selected_services && new_state.selected_services.length > 0
+                            ? new_state.selected_services
+                            : [],
+                    },
+                }));
+            } else {
+                // env_data_map is not ready yet
+                setState((new_state) => ({
+                    ...new_state,
+                    enable_service_input: false,
+                    service_list: [],
+                    data: {
+                        ...new_state.data,
+                        service: [],
+                    },
+                }));
+            }
+        } else if (state.data.project_envs && state.data.project_envs.length > 1) {
+            setState((new_state) => ({
+                ...new_state,
+                enable_service_input: false,
+                data_loading: false,
+                data: {
+                    ...new_state.data,
+                    service: [],
+                },
+            }));
+        } else {
+            setState((new_state) => ({
+                ...new_state,
+                enable_service_input: false,
+                data_loading: false,
+                data: {
+                    ...new_state.data,
+                    service: [],
+                },
+            }));
+        }
+    }, [state.data.project_envs, state.env_data_map]);
+
+    function getProjectEnvList(master_env) {
+        try {
+            if (!state.env_data_map || !state.env_data_map[master_env]) {
+                console.error("env_data_map or master_env not found:", {
+                    env_data_map: state.env_data_map,
+                    master_env
+                });
+                return [];
+            }
+
+            const arr = [];
+            const env_names = Object.keys(state.env_data_map[master_env]);
+
+            env_names.forEach((item) => {
+                if (state.env_data_map[master_env][item] &&
+                    state.env_data_map[master_env][item].id) {
+                    arr.push({
+                        id: state.env_data_map[master_env][item].id,
+                        label: item
+                    });
+                }
+            });
+
+            return arr;
+        } catch (error) {
+            console.error("Error getting project env list:", error);
+            return [];
+        }
+    }
+
+    function getServiceList(master_env, project_env) {
+        try {
+            // Validate that env_data_map exists and has the master_env key
+            if (!state.env_data_map || !state.env_data_map[master_env]) {
+                console.error("env_data_map or master_env not found:", {
+                    env_data_map: state.env_data_map,
+                    master_env
+                });
+                setState((new_state) => ({
+                    ...new_state,
+                    service_list: [],
+                    data_loading: false,
+                    error_loading_data: "Environment data not available",
+                }));
+                showSnackbar("error", "Environment data not available");
+                return;
+            }
+
+            let services;
+            const sub_env_list = Object.keys(state.env_data_map[master_env]);
+
+            sub_env_list.forEach((item) => {
+                if (state.env_data_map[master_env][item] &&
+                    state.env_data_map[master_env][item].id === project_env) {
+                    services = state.env_data_map[master_env][item].service_name_list;
+                }
+            });
+
+            if (!services || services.length === 0) {
+                setState((new_state) => ({
+                    ...new_state,
+                    service_list: [],
+                    data_loading: false,
+                    error_loading_data: null, // Don't show error for empty services
+                }));
+                return;
+            }
+
+            const updated_list = services.map(item => ({ id: item, label: item }));
+
+            setState((new_state) => ({
+                ...new_state,
+                service_list: updated_list,
+                data_loading: false,
+                error_loading_data: null,
+            }));
+        } catch (error) {
+            console.error("Error loading services:", error);
+            setState((new_state) => ({
+                ...new_state,
+                service_list: [],
+                data_loading: false,
+                error_loading_data: "Failed to load services. Please try again.",
+            }));
+            showSnackbar("error", "Failed to load services");
+        }
+    }
+
+    function fetchFreezeDetails() {
+        const requestInfo = {
+            endPoint: GenerateURL(
+                { freeze_id: freeze_id },
+                properties.api.single_freeze_details
+            ),
+            httpMethod: "GET",
+            httpHeaders: { "Content-Type": "application/json" },
+        };
+
+        setState((new_state) => ({
+            ...new_state,
+            data_loading: true,
+            error_loading_data: null,
+        }));
+
+        InvokeApi(
+            requestInfo,
+            fetchFreezeDetailsSuccess,
+            handleFetchFreezeDetailsFailed
+        );
+    }
+
+    function fetchFreezeDetailsSuccess(response) {
+        try {
+            const daysObject = response.days
+                ? getDaysObjectInCaseOfEdit(response.days)
+                : {};
+
+            const appKeys = Object.keys(response.entities).map(Number);
+            const app_id = appKeys[0];
+
+            const newStateData = {
+                ...state.data,
+                name: response.name,
+                end_date: response.end_date,
+                start_date: response.start_date,
+                start_time: response.start_time,
+                end_time: response.end_time,
+                freeze_type: response.days
+                    ? "Repeating & Window based"
+                    : "Onetime Continuous",
+                days_type: daysObject?.days_type || state.data.days_type,
+                entity_type: "micro_service",
+                entity_action: response.entity_action || "deploy",
+                timezone: response.timezone || null,
+                applications: appKeys,
+            };
+
+            const extraState = {
+                selected_app_ids: appKeys,
+                selected_master_env_list: response.entities[app_id]?.environment_master || [],
+                selected_project_envs: response.entities[app_id]?.project_environment || [],
+                selected_services: response.entities[app_id]?.service || [],
+                selected_days: daysObject?.selected_days,
+                error_loading_data: null,
+            };
+
+            setState((prev_state) => ({
+                ...prev_state,
+                ...extraState,
+                data: newStateData,
+            }));
+        } catch (error) {
+            console.error("Error processing freeze details:", error);
+            handleFetchFreezeDetailsFailed("Failed to process freeze details");
+        }
+    }
+
+    function getDaysObjectInCaseOfEdit(daysArray) {
+        if (!Array.isArray(daysArray)) return {};
+
+        const weekends = ["Saturday", "Sunday"];
+        const weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
+
+        const dayLabelMap = {
+            Monday: "M",
+            Tuesday: "T",
+            Wednesday: "W",
+            Thursday: "T",
+            Friday: "F",
+            Saturday: "S",
+            Sunday: "S",
+        };
+
+        const sortedInput = [...daysArray].sort((a, b) => a.localeCompare(b));
+        const sortedWeekends = [...weekends].sort((a, b) => a.localeCompare(b));
+        const sortedWeekdays = [...weekdays].sort((a, b) => a.localeCompare(b));
+
+        let days_type;
+        let days;
+
+        if (
+            sortedInput.length === sortedWeekends.length &&
+            sortedInput.every((day, idx) => day === sortedWeekends[idx])
+        ) {
+            days_type = "Weekends";
+            days = weekends;
+        } else if (
+            sortedInput.length === sortedWeekdays.length &&
+            sortedInput.every((day, idx) => day === sortedWeekdays[idx])
+        ) {
+            days_type = "Weekdays";
+            days = weekdays;
+        } else {
+            days_type = "Custom days";
+            days = daysArray;
+        }
+
+        const selected_days = days.map((day) => ({
+            id: day,
+            label: dayLabelMap[day] || "",
+        }));
+
+        return {
+            days_type,
+            selected_days,
+        };
+    }
+
+    function handleFetchFreezeDetailsFailed(error) {
+        console.error("Freeze details fetch failed:", error);
+        const errorMessage = showErrorHandlerUpdated(error);
+
+        setState((new_state) => ({
+            ...new_state,
+            data_loading: false,
+            error_loading_data: errorMessage || "Failed to load freeze details",
+        }));
+
+        showSnackbar("error", errorMessage || "Failed to load freeze details");
+    }
+
+    function getApplicationList() {
+        const requestInfo = {
+            endPoint: GenerateURL({}, properties.api.side_panel_data),
+            httpMethod: "GET",
+            httpHeaders: { "Content-Type": "application/json" },
+        };
+
+        InvokeApi(
+            requestInfo,
+            fetchApplicationListSuccess,
+            fetchApplicationListFailed
+        );
+    }
+
+    function fetchApplicationListSuccess(response) {
+        try {
+            const list = response.map((item) => ({
+                id: item.id,
+                label: item.name,
+            }));
+
+            setState((new_state) => ({
+                ...new_state,
+                application_list: list,
+                error_loading_data: null,
+            }));
+        } catch (error) {
+            console.error("Error processing application list:", error);
+            fetchApplicationListFailed("Failed to process application data");
+        }
+    }
+
+    function fetchApplicationListFailed(error) {
+        const errorMessage = showErrorHandlerUpdated(error);
+
+        setState((new_state) => ({
+            ...new_state,
+            application_list: [],
+            error_loading_data: errorMessage || "Failed to load applications",
+        }));
+
+        showSnackbar("error", errorMessage || "Failed to load applications");
+    }
+
+    function fetchEnvironmentsData(application_id) {
+        const requestInfo = {
+            endPoint: GenerateURL(
+                { application_id: application_id },
+                properties.api.env_listing_all_true
+            ),
+            httpMethod: "GET",
+            httpHeaders: { "Content-Type": "application/json" },
+        };
+
+        setState((new_state) => ({
+            ...new_state,
+            data_loading: true,
+            error_loading_data: null,
+        }));
+
+        InvokeApi(requestInfo, fetchEnvListSuccess, fetchEnvListFailed);
+    }
+
+    function fetchEnvListSuccess(response) {
+        try {
+            if (!response || !response.results) {
+                throw new Error("Invalid response format");
+            }
+
+            let environment_master_list = [];
+            let env_data_map = {};
+
+            response.results.forEach((item) => {
+                const isDuplicate = environment_master_list.some(
+                    (existing) => existing.label === item.environment_master.name
+                );
+
+                if (!isDuplicate) {
+                    environment_master_list.push({
+                        id: item.environment_master.id,
+                        label: item.environment_master.name,
+                    });
+                }
+
+                let env_master_id = item.environment_master.id;
+                env_data_map[env_master_id] = {
+                    ...env_data_map[env_master_id],
+                    [item.name]: {
+                        id: item.id,
+                        service_name_list: item.component_name_list,
+                    },
+                };
+            });
+
+            setState((new_state) => ({
+                ...new_state,
+                environment_master_list: environment_master_list,
+                env_data_map: env_data_map,
+                enable_master_env_input: true,
+                data_loading: false,
+                error_loading_data: null,
+            }));
+
+            if (state.selected_master_env_list && state.selected_master_env_list.length > 0) {
+                setMasterEnvs(environment_master_list);
+            }
+        } catch (error) {
+            console.error("Error processing environment data:", error);
+            fetchEnvListFailed(error);
+        }
+    }
+
+    function fetchEnvListFailed(error) {
+        const errorMessage = showErrorHandlerUpdated(error);
+
+        setState((new_state) => ({
+            ...new_state,
+            environment_master_list: [],
+            env_data_map: {},
+            enable_master_env_input: false,
+            data_loading: false,
+            error_loading_data: errorMessage || "Failed to load environments",
+        }));
+
+        showSnackbar("error", errorMessage || "Failed to load environments");
+    }
+
+    const setMasterEnvs = (environment_master_list) => {
+        setState((new_state) => ({
+            ...new_state,
+            data_loading: false,
+            data: {
+                ...new_state.data,
+                master_env: new_state.selected_master_env_list,
+            },
+        }));
+    };
+
+    const onFreezeTypeChange = (e) => {
+        const value = e.target.value;
+        let extraData = {};
+
+        if (value === "Repeating & Window based") {
+            extraData["selected_days"] = [
+                { id: "Monday", label: "M" },
+                { id: "Tuesday", label: "T" },
+                { id: "Wednesday", label: "W" },
+                { id: "Thursday", label: "T" },
+                { id: "Friday", label: "F" },
+            ];
+        }
+
+        setState((new_state) => ({
+            ...new_state,
+            ...extraData,
+            data: {
+                ...new_state.data,
+                days_type: "Weekdays",
+                freeze_type: value,
+                start_date: null,
+                end_date: null,
+            },
+        }));
+    };
+
+    const days_type_list = [
+        { id: "Weekdays", label: "Weekdays" },
+        { id: "Weekends", label: "Weekends" },
+        { id: "Custom days", label: "Custom days" },
+    ];
+
+    useEffect(() => {
+        setState((new_state) => ({
+            ...new_state,
+            selected_days:
+                state.data.days_type === "Weekends"
+                    ? [
+                        { id: "Sunday", label: "S" },
+                        { id: "Saturday", label: "S" },
+                    ]
+                    : state.data.days_type === "Weekdays"
+                        ? [
+                            { id: "Monday", label: "M" },
+                            { id: "Tuesday", label: "T" },
+                            { id: "Wednesday", label: "W" },
+                            { id: "Thursday", label: "T" },
+                            { id: "Friday", label: "F" },
+                        ]
+                        : state.data.days_type === "Custom days"
+                            ? new_state.selected_days
+                            : [],
+        }));
+    }, [state.data.days_type]);
+
+    function checkIfIncluded(day) {
+        if (!state?.selected_days) return false;
+        return state.selected_days.some(item => item.id === day.id);
+    }
+
+    function handleSelectDay(selectedDay) {
+        const currentSelected = [...state.selected_days];
+        const dayIndex = currentSelected.findIndex(
+            (day) => day.id === selectedDay.id
+        );
+
+        let newSelected;
+        let newDaysType;
+
+        if (dayIndex === -1) {
+            newSelected = [...currentSelected, selectedDay].sort((a, b) => {
+                const dayOrder = [
+                    "Monday",
+                    "Tuesday",
+                    "Wednesday",
+                    "Thursday",
+                    "Friday",
+                    "Saturday",
+                    "Sunday",
+                ];
+                return dayOrder.indexOf(a.id) - dayOrder.indexOf(b.id);
+            });
+        } else {
+            newSelected = currentSelected.filter((day) => day.id !== selectedDay.id);
+        }
+
+        if (newSelected.length === 0) {
+            newDaysType = "Custom days";
+        } else if (isWeekdays(newSelected)) {
+            newDaysType = "Weekdays";
+        } else if (isWeekends(newSelected)) {
+            newDaysType = "Weekends";
+        } else {
+            newDaysType = "Custom days";
+        }
+
+        setState((new_state) => ({
+            ...new_state,
+            selected_days: newSelected,
+            data: {
+                ...new_state.data,
+                days_type: newDaysType,
+            },
+        }));
+    }
+
+    function isWeekdays(days) {
+        const weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
+        const selectedIds = days.map((day) => day.id).sort((a, b) => a.localeCompare(b));
+        const weekdaysSorted = [...weekdays].sort((a, b) => a.localeCompare(b));
+
+        return (
+            selectedIds.length === weekdays.length &&
+            JSON.stringify(selectedIds) === JSON.stringify(weekdaysSorted)
+        );
+    }
+
+    function isWeekends(days) {
+        const weekends = ["Saturday", "Sunday"];
+        const selectedIds = days.map((day) => day.id).sort((a, b) => a.localeCompare(b));
+        const weekendsSorted = [...weekends].sort((a, b) => a.localeCompare(b));
+
+        return (
+            selectedIds.length === weekends.length &&
+            JSON.stringify(selectedIds) === JSON.stringify(weekendsSorted)
+        );
+    }
+
+    function handleEditStartDate() {
+        setState((new_state) => ({
+            ...new_state,
+            edit_start_date: true,
+        }));
+    }
+
+    function handleEditEndDate() {
+        setState((new_state) => ({
+            ...new_state,
+            edit_end_date: true,
+        }));
+    }
+
+    function setStartDateToDefault() {
+        setState((new_state) => ({
+            ...new_state,
+            edit_start_date: false,
+            data: {
+                ...new_state.data,
+                start_date: null,
+            },
+        }));
+    }
+
+    function setEndDateToDefault() {
+        setState((new_state) => ({
+            ...new_state,
+            edit_end_date: false,
+            data: {
+                ...new_state.data,
+                end_date: null,
+            },
+        }));
+    }
+
+    const onKeyValueHandler = (e) => {
+        const k = e.target.name;
+        let v = e.target.value;
+
+        if (Array.isArray(v) && v.length > 0 && typeof v[0] === "string") {
+            v[0] = v[0].replace(" (New Label)", "");
+        }
+
+        setState((new_state) => ({
+            ...new_state,
+            data: {
+                ...new_state.data,
+                [k]: v,
+            },
+            error: { ...new_state.error, [k]: "" },
+        }));
+    };
+
+    function handleCancelAddFreeze() {
+        setState((new_state) => ({
+            ...new_state,
+            redirect_to_list: true,
+        }));
+    }
+
+    function getTodayDate() {
+        const today = new Date();
+        const year = today.getFullYear();
+        const month = String(today.getMonth() + 1).padStart(2, "0");
+        const day = String(today.getDate()).padStart(2, "0");
+        return `${year}-${month}-${day}`;
+    }
+
+    function getFormattedDate(addYears = 0) {
+        const date = new Date();
+        date.setFullYear(date.getFullYear() + addYears);
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
+        return `${year}-${month}-${day}`;
+    }
+
+    function getEntitiesDataForOneApplication() {
+        let obj = {};
+        obj[state.data.applications[0]] = {
+            environment_master: state.data.master_env,
+            project_environment: state.data.project_envs,
+            service: state.data.service,
+        };
+        return obj;
+    }
+
+    function getEntitiesDataForMultipleApplication() {
+        let obj = {};
+        state.data.applications.forEach((item) => {
+            obj[item] = {
+                environment_master: [],
+                project_environment: null,
+                service: null,
+            };
+        });
+        state.data.master_env.forEach((item) => {
+            Object.keys(obj).forEach((app) => {
+                obj[app].environment_master.push(item);
+            });
+        });
+        return obj;
+    }
+
+    function getSelectedDaysArray(data) {
+        return data.map(item => item.id);
+    }
+
+    function validateAndSaveData() {
+        const post_url = freeze_id
+            ? GenerateURL({ freeze_id: freeze_id }, properties.api.single_freeze_details)
+            : GenerateURL({}, properties.api.save_change_freeze);
+
+        const commonValidations = {
+            name: [VALIDATION_TYPE_REQUIRED],
+            applications: [VALIDATION_TYPE_REQUIRED],
+            master_env: [VALIDATION_TYPE_REQUIRED],
+            project_envs:
+                state.data.applications.length > 1 || state.data.master_env.length > 1
+                    ? []
+                    : [VALIDATION_TYPE_REQUIRED],
+            service:
+                state.data.applications.length > 1 ||
+                    state.data.master_env.length > 1 ||
+                    state.data.project_envs.length > 1
+                    ? []
+                    : [VALIDATION_TYPE_REQUIRED],
+            timezone: [VALIDATION_TYPE_REQUIRED],
+        };
+
+        const oneTimeContinuousValidations = {
+            start_date: [VALIDATION_TYPE_REQUIRED],
+            start_time: [VALIDATION_TYPE_REQUIRED],
+            end_date: [VALIDATION_TYPE_REQUIRED],
+            end_time: [VALIDATION_TYPE_REQUIRED],
+        };
+
+        const repeatingAndWindowValidations = {
+            start_time: [VALIDATION_TYPE_REQUIRED],
+            end_time: [VALIDATION_TYPE_REQUIRED],
+            start_date: state.edit_start_date ? [VALIDATION_TYPE_REQUIRED] : [],
+            end_date: state.edit_end_date ? [VALIDATION_TYPE_REQUIRED] : [],
+        };
+
+        const specificValidations =
+            state.data.freeze_type === "Onetime Continuous"
+                ? oneTimeContinuousValidations
+                : repeatingAndWindowValidations;
+
+        const result = ValidateDataSet(state.data, {
+            ...specificValidations,
+            ...commonValidations,
+        });
+
+        if (!result.valid) {
+            setState((prev_state) => ({
+                ...prev_state,
+                error: result.error,
+            }));
+            showSnackbar("error", "Please fill all the required details");
+            return;
+        }
+
+        const post_data = {
+            name: state.data.name,
+            start_date:
+                state.data.freeze_type === "Onetime Continuous"
+                    ? state.data.start_date
+                    : state.data.start_date || getTodayDate(),
+            entities:
+                state.data.applications.length === 1
+                    ? getEntitiesDataForOneApplication()
+                    : getEntitiesDataForMultipleApplication(),
+            start_time: state.data.start_time,
+            end_time: state.data.end_time,
+            end_date:
+                state.data.freeze_type === "Onetime Continuous"
+                    ? state.data.end_date
+                    : state.data.end_date || getFormattedDate(20),
+            days:
+                state.data.freeze_type === "Onetime Continuous"
+                    ? null
+                    : getSelectedDaysArray(state.selected_days),
+            entity_type: "micro_service",
+            entity_action: state.data.entity_action,
+            timezone: state.data.timezone,
+        };
+
+        showSnackbar(
+            "info",
+            freeze_id
+                ? "Updating change freeze window configuration..."
+                : "Creating change freeze window configuration..."
+        );
+
+        PostData(
+            post_url,
+            post_data,
+            handleSuccessAddChangeFreeze,
+            handleFailedAddChangeFreeze
+        );
+    }
+
+    function handleSuccessAddChangeFreeze(response) {
+        showSnackbar(
+            "success",
+            `Change freeze ${freeze_id ? "updated" : "created"} successfully.`
+        );
+        setState((new_state) => ({
+            ...new_state,
+            redirect_to_list: true,
+        }));
+    }
+
+    function handleFailedAddChangeFreeze(error) {
+        const error_msg = showErrorHandlerUpdated(error);
+        showSnackbar(
+            "error",
+            `Unable to ${freeze_id ? "update" : "create"} change freeze: ${error_msg}`
+        );
+    }
+
+    if (state.redirect_to_list) {
+        return <Navigate to="/projects/freeze-deployments" replace />;
+    }
+
+    return (
+        <div className="d-grid" style={{ gridTemplateColumns: "var(--space-320) 1fr" }}>
+            <div
+                className="p-relative"
+                style={{
+                    height: `${height}px`,
+                    background:
+                        "linear-gradient(40.64deg, #07192A 24.63%, #030F1B 70.72%, #001A33 90.66%)",
+                    padding: "var(--space-24)",
+                }}
+            >
+                <span className="chip chip-primary font-weight-600 mb-12 d-inline-block">
+                    ABOUT
+                </span>
+                <p
+                    className="font-14 font-weight-700 mb-16"
+                    style={{ color: "#FEA111" }}
+                >
+                    Freeze Window
+                </p>
+                <p className="font-14 font-weight-400" style={{ color: "#fff" }}>
+                    Change Freeze in BuildPiper allows teams to temporarily restrict
+                    actions or modifications across selected entities within the platform.
+                    These entities can include actions or modifications around builds,
+                    deployments, environments, pipelines, and more depending on the
+                    platform setup.
+                    <br />
+                    <br />
+                    With Change Freeze Window, you can:
+                    <br />
+                    <br />
+                    - Lock the system to prevent unintended changes or updates.
+                    <br />
+                    - Focus on monitoring and maintaining operational stability.
+                    <br />
+                    - Allow only critical, pre-approved emergency fixes when necessary.
+                    <br />
+                    <br />
+                    This feature ensures seamless operations during high-priority times by
+                    minimizing risks.
+                </p>
+                <div className="bg-watermark"></div>
+            </div>
+            <ChangeFreezeAddForm>
+                {state.data_loading ? (
+                    <AddFormSkeleton />
+                ) : state.error_loading_data ? (
+                    <AlertStrip message={state.error_loading_data} variant="error" />
+                ) : (
+                    <>
+                        <div className="header">
+                            <div className="left-part">
+                                <div className="icon-div">
+                                    <span
+                                        className="ri-pause-circle-line"
+                                        style={{ color: "#0086FF", fontSize: "var(--font-24)" }}
+                                    ></span>
+                                </div>
+                                <div className="header-detail">
+                                    <span
+                                        style={{
+                                            fontFamily: "Montserrat",
+                                            fontSize: "var(--font-18)",
+                                            fontWeight: "600",
+                                            lineHeight: "21.94px",
+                                            color: "#2F2F2F",
+                                        }}
+                                    >
+                                        {freeze_id ? "Edit" : "Create"} Freeze Window
+                                    </span>
+                                    <Tooltip
+                                        title="BuildPiper's Change Freeze feature restricts code deployments during designated freeze periods."
+                                        arrow
+                                    >
+                                        <span
+                                            className="ri-information-line"
+                                            style={{
+                                                marginLeft: "var(--space-8)",
+                                                fontSize: "var(--font-20)",
+                                                color: "#505050",
+                                                cursor: "pointer",
+                                            }}
+                                        ></span>
+                                    </Tooltip>
+                                </div>
+                            </div>
+                        </div>
+                        <div
+                            style={{
+                                fontFamily: "Montserrat",
+                                fontWeight: "600",
+                                fontSize: "var(--font-16)",
+                                color: "#2F2F2F",
+                                margin: "var(--space-32) 0",
+                            }}
+                        >
+                            Fill the following details to {freeze_id ? "update" : "create"} freeze window
+                        </div>
+
+                        {state.error_loading_data && (
+                            <div style={{ marginBottom: "var(--space-20)" }}>
+                                <AlertStrip message={state.error_loading_data} variant="error" />
+                            </div>
+                        )}
+
+                        <Grid container>
+                            <Grid item lg={12}>
+                                <Input
+                                    type="text"
+                                    name="name"
+                                    label="Name"
+                                    mandatorySign
+                                    placeholder="Enter freeze window name"
+                                    onChangeHandler={commonFunctions.onChangeHandler}
+                                    data={state.data}
+                                    error={state.error}
+                                    info="Enter a descriptive name for this freeze window"
+                                />
+                            </Grid>
+                        </Grid>
+                        <div className="font-style-1" style={{ margin: "32px 0 24px 0" }}>
+                            Configure Freeze Window
+                        </div>
+                        <div>
+                            <Input
+                                type="custom-radio"
+                                name="freeze_type"
+                                data={state.data}
+                                error={state.error}
+                                list={optionList}
+                                customRadio={StyledRadio}
+                                customLabel={CustomLabel}
+                                mandatorySign
+                                onChangeHandler={onFreezeTypeChange}
+                            />
+                            {state.data.freeze_type === "Onetime Continuous" ? (
+                                <Grid container spacing={2}>
+                                    <Grid item lg={4}>
+                                        <Input
+                                            type="date"
+                                            mandatorySign
+                                            name="start_date"
+                                            label="Start Date"
+                                            placeholder=""
+                                            onChangeHandler={commonFunctions.onChangeHandler}
+                                            data={state.data}
+                                            error={state.error}
+                                        />
+                                    </Grid>
+                                    <Grid item lg={4}>
+                                        <Input
+                                            type="time"
+                                            mandatorySign
+                                            name="start_time"
+                                            label="Start Time"
+                                            placeholder=""
+                                            onChangeHandler={commonFunctions.onChangeHandler}
+                                            data={state.data}
+                                            error={state.error}
+                                        />
+                                    </Grid>
+                                    <Grid item lg={4}></Grid>
+                                    <Grid item lg={4}>
+                                        <Input
+                                            type="date"
+                                            mandatorySign
+                                            name="end_date"
+                                            label="End Date"
+                                            placeholder=""
+                                            onChangeHandler={commonFunctions.onChangeHandler}
+                                            data={state.data}
+                                            error={state.error}
+                                        />
+                                    </Grid>
+                                    <Grid item lg={4}>
+                                        <Input
+                                            type="time"
+                                            mandatorySign
+                                            name="end_time"
+                                            label="End Time"
+                                            placeholder=""
+                                            onChangeHandler={commonFunctions.onChangeHandler}
+                                            data={state.data}
+                                            error={state.error}
+                                        />
+                                    </Grid>
+                                    <Grid item lg={4}></Grid>
+                                    <Grid item lg={8}>
+                                        <Input
+                                            type="auto-complete-dropdown"
+                                            label="Select Timezone"
+                                            id="time_zone_2"
+                                            name="timezone"
+                                            mandatorySign
+                                            getOptionLabel={(option) => option.label}
+                                            list={convertList(timezoneList)}
+                                            data={state.data}
+                                            error={state.error}
+                                            onChangeHandler={commonFunctions.onKeyValueChangeHandler}
+                                        />
+                                    </Grid>
+                                </Grid>
+                            ) : (
+                                <div>
+                                    <div
+                                        style={{
+                                            fontFamily: "Montserrat",
+                                            fontSize: "var(--font-12)",
+                                            fontWeight: "600",
+                                            color: "#2F2F2F",
+                                        }}
+                                    >
+                                        Days*
+                                    </div>
+                                    <div className="days-select-div">
+                                        <Input
+                                            type="select"
+                                            label=""
+                                            name="days_type"
+                                            placeholder=""
+                                            list={days_type_list}
+                                            error={state.error}
+                                            data={state.data}
+                                            onChangeHandler={commonFunctions.onChangeHandler}
+                                        />
+                                        <div className="days-list">
+                                            {state.days_list.map((day) => (
+                                                <div
+                                                    key={day.id}
+                                                    className={
+                                                        checkIfIncluded(day)
+                                                            ? "day-box-selected"
+                                                            : "day-box"
+                                                    }
+                                                    onClick={() => handleSelectDay(day)}
+                                                    role="button"
+                                                    tabIndex={0}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter' || e.key === ' ') {
+                                                            handleSelectDay(day);
+                                                        }
+                                                    }}
+                                                >
+                                                    {day.label}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <div style={{ width: "var(--space-622)", marginTop: "var(--space-20)" }}>
+                                        <Grid container spacing={2} style={{ width: "var(--space-622)" }}>
+                                            <Grid item lg={4}>
+                                                <Input
+                                                    type="time"
+                                                    mandatorySign
+                                                    name="start_time"
+                                                    label="Start Time"
+                                                    placeholder=""
+                                                    onChangeHandler={commonFunctions.onChangeHandler}
+                                                    data={state.data}
+                                                    error={state.error}
+                                                />
+                                            </Grid>
+                                            <Grid item lg={4}>
+                                                <Input
+                                                    type="time"
+                                                    mandatorySign
+                                                    name="end_time"
+                                                    label="End Time"
+                                                    placeholder=""
+                                                    onChangeHandler={commonFunctions.onChangeHandler}
+                                                    data={state.data}
+                                                    error={state.error}
+                                                />
+                                            </Grid>
+                                            <Grid item lg={8}>
+                                                <Input
+                                                    type="auto-complete-dropdown"
+                                                    label="Select Timezone"
+                                                    id="time_zone_2"
+                                                    name="timezone"
+                                                    mandatorySign
+                                                    getOptionLabel={(option) => option.label}
+                                                    list={convertList(timezoneList)}
+                                                    data={state.data}
+                                                    error={state.error}
+                                                    onChangeHandler={
+                                                        commonFunctions.onKeyValueChangeHandler
+                                                    }
+                                                />
+                                            </Grid>
+                                        </Grid>
+                                    </div>
+                                    <div className="date-interval-div">
+                                        <span className="interval-label">Starts</span>
+                                        <div
+                                            style={{
+                                                display: "flex",
+                                                alignItems: "center",
+                                                marginTop: "var(--space-8)",
+                                            }}
+                                        >
+                                            {state.edit_start_date ? (
+                                                <div
+                                                    style={{
+                                                        width: "var(--space-277)",
+                                                        display: "flex",
+                                                        alignItems: "center",
+                                                    }}
+                                                >
+                                                    <Input
+                                                        type="date"
+                                                        mandatorySign
+                                                        name="start_date"
+                                                        label="Start Date"
+                                                        placeholder=""
+                                                        onChangeHandler={commonFunctions.onChangeHandler}
+                                                        data={state.data}
+                                                        error={state.error}
+                                                    />
+                                                    <span
+                                                        className="ri-close-circle-line"
+                                                        style={{
+                                                            color: "#787878",
+                                                            fontSize: "var(--font-20)",
+                                                            marginLeft: "var(--space-8)",
+                                                            marginTop: "var(--space-3)",
+                                                            cursor: "pointer",
+                                                        }}
+                                                        onClick={setStartDateToDefault}
+                                                        role="button"
+                                                        tabIndex={0}
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === 'Enter' || e.key === ' ') {
+                                                                setStartDateToDefault();
+                                                            }
+                                                        }}
+                                                    ></span>
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    <div className="today-label font-style-1">Today</div>
+                                                    <div
+                                                        style={{
+                                                            marginLeft: "var(--space-14)",
+                                                            color: "#0086FF",
+                                                            cursor: "pointer",
+                                                        }}
+                                                        onClick={handleEditStartDate}
+                                                        role="button"
+                                                        tabIndex={0}
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === 'Enter' || e.key === ' ') {
+                                                                handleEditStartDate();
+                                                            }
+                                                        }}
+                                                    >
+                                                        <span
+                                                            className="ri-edit-line"
+                                                            style={{ fontSize: "var(--font-20)", marginRight: "var(--space-4)" }}
+                                                        ></span>
+                                                        SET START DATE
+                                                    </div>
+                                                </>
+                                            )}
+                                        </div>
+                                        <div
+                                            className="interval-label"
+                                            style={{ marginTop: "var(--space-20)" }}
+                                        >
+                                            Ends
+                                        </div>
+                                        <div
+                                            style={{
+                                                display: "flex",
+                                                alignItems: "center",
+                                                marginTop: "var(--space-8)",
+                                            }}
+                                        >
+                                            {state.edit_end_date ? (
+                                                <div
+                                                    style={{
+                                                        width: "var(--space-277)",
+                                                        display: "flex",
+                                                        alignItems: "center",
+                                                    }}
+                                                >
+                                                    <Input
+                                                        type="date"
+                                                        mandatorySign
+                                                        name="end_date"
+                                                        label="End Date"
+                                                        placeholder=""
+                                                        onChangeHandler={commonFunctions.onChangeHandler}
+                                                        data={state.data}
+                                                        error={state.error}
+                                                    />
+                                                    <span
+                                                        className="ri-close-circle-line"
+                                                        style={{
+                                                            color: "#787878",
+                                                            fontSize: "var(--font-20)",
+                                                            marginLeft: "var(--space-8)",
+                                                            marginTop: "var(--space-3)",
+                                                            cursor: "pointer",
+                                                        }}
+                                                        onClick={setEndDateToDefault}
+                                                        role="button"
+                                                        tabIndex={0}
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === 'Enter' || e.key === ' ') {
+                                                                setEndDateToDefault();
+                                                            }
+                                                        }}
+                                                    ></span>
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    <div className="today-label font-style-1">Never</div>
+                                                    <div
+                                                        style={{
+                                                            marginLeft: "var(--space-14)",
+                                                            color: "#0086FF",
+                                                            cursor: "pointer",
+                                                        }}
+                                                        onClick={handleEditEndDate}
+                                                        role="button"
+                                                        tabIndex={0}
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === 'Enter' || e.key === ' ') {
+                                                                handleEditEndDate();
+                                                            }
+                                                        }}
+                                                    >
+                                                        <span
+                                                            className="ri-edit-line"
+                                                            style={{ fontSize: "var(--font-20)", marginRight: "var(--space-4)" }}
+                                                        ></span>
+                                                        SET END DATE
+                                                    </div>
+                                                </>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                        <div className="font-style-1" style={{ margin: "var(--space-32) 0 var(--space-24) 0" }}>
+                            Configure Freeze Scope
+                        </div>
+                        <Grid container spacing={2}>
+                            <Grid item xs={6}>
+                                <Input
+                                    type="select"
+                                    label="Select Entity"
+                                    name="entity_type"
+                                    list={[
+                                        {
+                                            label: "Micro Service",
+                                            id: "micro_service",
+                                        },
+                                    ]}
+                                    mandatorySign
+                                    info="Entity represents the target that will be restricted from any actions during the freeze window."
+                                    error={state.error}
+                                    data={state.data}
+                                    onChangeHandler={commonFunctions.onChangeHandler}
+                                    disable={true}
+                                />
+                            </Grid>
+                            <Grid item xs={6}>
+                                <Input
+                                    type="select"
+                                    label="Select Action"
+                                    name="entity_action"
+                                    list={[
+                                        {
+                                            label: "Deploy",
+                                            id: "deploy",
+                                        },
+                                    ]}
+                                    mandatorySign
+                                    info="This will restrict the selected action for the chosen entity."
+                                    error={state.error}
+                                    data={state.data}
+                                    onChangeHandler={commonFunctions.onChangeHandler}
+                                />
+                            </Grid>
+                            <Grid item xs={12}>
+                                <div className="auto-complete-dropdown auto-complete-dropdown-42 auto-complete-dropdown-ticketing">
+                                    <Input
+                                        type="auto-complete-freesolo-v2"
+                                        label="Select applications you want to freeze"
+                                        id="applications_1"
+                                        name="applications"
+                                        list={state.application_list || []}
+                                        freeSolo={true}
+                                        count={10}
+                                        mandatorySign
+                                        allowNewItems={false}
+                                        placeholder="Select applications"
+                                        getOptionLabel={(option) => option.label}
+                                        error={state.error}
+                                        data={state.data}
+                                        onChangeHandler={onKeyValueHandler}
+                                    />
+                                </div>
+                            </Grid>
+                            <Grid item xs={12}>
+                                <div className="auto-complete-dropdown auto-complete-dropdown-42 auto-complete-dropdown-ticketing">
+                                    <Input
+                                        type="auto-complete-freesolo-v2"
+                                        label="Select Environment Master"
+                                        id="master_env_1"
+                                        name="master_env"
+                                        list={state.environment_master_list || []}
+                                        freeSolo={true}
+                                        count={10}
+                                        mandatorySign
+                                        allowNewItems={false}
+                                        placeholder="Select environment master"
+                                        getOptionLabel={(option) => option.label}
+                                        error={state.error}
+                                        data={state.data}
+                                        onChangeHandler={onKeyValueHandler}
+                                        disable={!state.enable_master_env_input}
+                                    />
+                                </div>
+                            </Grid>
+                            <Grid item xs={12}>
+                                <div className="auto-complete-dropdown auto-complete-dropdown-42 auto-complete-dropdown-ticketing">
+                                    <Input
+                                        type="auto-complete-freesolo-v2"
+                                        label="Select Project Environments"
+                                        id="project_envs_1"
+                                        name="project_envs"
+                                        list={state.project_env_list || []}
+                                        freeSolo={true}
+                                        count={10}
+                                        mandatorySign={state.enable_project_env_input}
+                                        allowNewItems={false}
+                                        placeholder="Select project environments"
+                                        getOptionLabel={(option) => option.label}
+                                        error={state.error}
+                                        data={state.data}
+                                        onChangeHandler={onKeyValueHandler}
+                                        disable={!state.enable_project_env_input}
+                                    />
+                                </div>
+                            </Grid>
+                            <Grid item xs={12}>
+                                <div className="auto-complete-dropdown auto-complete-dropdown-42 auto-complete-dropdown-ticketing">
+                                    <Input
+                                        type="auto-complete-freesolo-v2"
+                                        label="Select Services"
+                                        id="services_1"
+                                        name="service"
+                                        list={state.service_list || []}
+                                        freeSolo={true}
+                                        count={10}
+                                        mandatorySign={state.enable_service_input}
+                                        allowNewItems={false}
+                                        placeholder="Select services"
+                                        getOptionLabel={(option) => option.label}
+                                        error={state.error}
+                                        data={state.data}
+                                        onChangeHandler={onKeyValueHandler}
+                                        disable={!state.enable_service_input}
+                                    />
+                                </div>
+                            </Grid>
+                        </Grid>
+                        <div className="d-flex align-center justify-end" style={{ marginTop: "var(--space-32)" }}>
+                            <button
+                                className="btn btn-transparent mr-5"
+                                onClick={handleCancelAddFreeze}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={validateAndSaveData}
+                                className="btn btn-primary mr-0"
+                            >
+                                {freeze_id ? "Update" : "Save"}
+                            </button>
+                        </div>
+                    </>
+                )}
+            </ChangeFreezeAddForm>
+        </div>
+    );
+};
+
+const ChangeFreezeAddForm = styled("div")({
+    width: "100%",
+    backgroundColor: "var(--color-white)",
+    height: "calc(100vh - var(--space-50))",
+    overflow: "hidden",
+    border: "none",
+    boxShadow: "none",
+    padding: "0px",
+
+    "& .font-style-1": {
+        fontFamily: "Montserrat",
+        fontWeight: "var(--font-weight-600)",
+        fontSize: "var(--font-14)",
+        color: "var(--color-content-primary)",
+    },
+
+    "& .header": {
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+
+        "& .left-part": {
+            display: "flex",
+            alignItems: "center",
+            gap: "var(--space-16)",
+
+            "& .icon-div": {
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: "#0086FF14",
+                height: "var(--space-56)",
+                width: "var(--space-56)",
+                borderRadius: "var(--radius-8)",
+            },
+        },
+    },
+
+    "& .days-select-div": {
+        width: "var(--space-622)",
+        display: "flex",
+        alignItems: "center",
+        gap: "var(--space-20)",
+        padding: "var(--space-12)",
+        borderRadius: "var(--radius-8)",
+        border: "var(--space-1) solid var(--color-badge-blue-bg)",
+        backgroundColor: "var(--color-grey-000)",
+        marginTop: "var(--space-8)",
+
+        "& .input-component": {
+            marginBottom: "0px !important",
+        },
+
+        "& .days-list": {
+            display: "flex",
+            alignItems: "center",
+            gap: "var(--space-8)",
+
+            "& .day-box-selected": {
+                width: "var(--space-40)",
+                height: "var(--space-40)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: "var(--radius-5)",
+                borderWidth: "var(--space-1) solid #DFEDFF",
+                backgroundColor: "var(--color-tertiary-500)",
+                fontFamily: "Montserrat",
+                fontWeight: "500",
+                fontSize: "var(--font-16)",
+                color: "#FFFFFF",
+                cursor: "pointer",
+                transition: "all 0.2s ease",
+
+                "&:hover": {
+                    opacity: 0.9,
+                },
+            },
+
+            "& .day-box": {
+                width: "var(--space-40)",
+                height: "var(--space-40)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: "var(--radius-5)",
+                borderWidth: "var(--space-1) solid #DFEDFF",
+                backgroundColor: "var(--color-pastel-blue-2)",
+                fontFamily: "Montserrat",
+                fontWeight: "500",
+                fontSize: "var(--font-16)",
+                color: "#2F2F2F",
+                cursor: "pointer",
+                transition: "all 0.2s ease",
+
+                "&:hover": {
+                    backgroundColor: "#D6EAFF",
+                },
+            },
+        },
+    },
+
+    "& .date-interval-div": {
+        marginTop: "var(--space-20)",
+
+        "& .interval-label": {
+            fontFamily: "Montserrat",
+            fontWeight: "600",
+            fontSize: "var(--font-12)",
+            color: "#2F2F2F",
+        },
+
+        "& .today-label": {
+            borderRadius: "var(--radius-6)",
+            border: "var(--space-1) solid #E6E6E6",
+            padding: "var(--space-4) var(--space-8)",
+            backgroundColor: "#FAFAFA",
+        },
+    },
+});
+
+export default AddChangeFreeze;
