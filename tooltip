@@ -1,0 +1,467 @@
+import React, { useState, useEffect, useRef } from "react";
+import PropTypes from 'prop-types';
+import { styled } from '@mui/system';
+import { FormatTime } from "../../../../util/util";
+import { Link } from 'react-router-dom';
+import MonitoringDialogue from "../../../service/detail/components/MonitoringDialogue";
+import { makeStyles } from '@mui/styles';
+import MonitoringDialogueCopy from "../../../service/detail/components/MonitoringDialogueCOPY";
+import PipelineDeployStatus from "./PipelineDeployStatus";
+import { Tooltip } from "@mui/material";
+
+
+const MultipleDeploymentCard = ({ informationData, getSymbol, activityDetailsDuration, selectedInfoId, updateSelectedInformationId, component_name, env_name, activity_id, component_task_instance, component_id, env_master, manual_deploy_flag, open_by_default, component_env_id, task_type }) => {
+    console.log(informationData, component_name, env_name, component_env_id, "susiususis")
+    const [state, setState] = useState({
+        open: false
+    })
+    const [mouseX, setMouseX] = useState(0);
+    const [mouseY, setMouseY] = useState(0);
+    const mouseMoveTimer = useRef(null);
+    const count = useRef(0);
+    const open = informationData.id == selectedInfoId
+    const toggleView = (id) => {
+        updateSelectedInformationId(id)
+    }
+    const classes = usePopOverStyles()
+    const start_time = new Date(informationData.activity_status && informationData.activity_status.start_time ? informationData.activity_status.start_time : "");
+    const end_time = new Date(informationData.activity_status && informationData.activity_status.start_time ? informationData.activity_status.end_time : "");
+    const diff = end_time - start_time;
+    const time_taken = FormatTime(diff);
+    open && console.log('recalling_state_everytime', selectedInfoId, informationData)
+
+    console.log('recalling_state_everytime', task_type, informationData)
+
+    const [anchorEl, setAnchorEl] = useState(null);
+
+    const handleClick = (event) => {
+        setAnchorEl(true);
+    };
+    useEffect(() => {
+        handleClick()
+        if (open_by_default) {
+            toggleView(informationData.id);
+        }
+    }, []);
+    const handleClose = () => {
+        setAnchorEl(null);
+    };
+    const getMasterLabel = (env_master_id) => {
+        var env;
+        if (env_master_id == 1)
+            env = 'dev';
+        if (env_master_id == 2)
+            env = 'qa';
+        if (env_master_id == 3)
+            env = 'staging';
+        if (env_master_id == 4)
+            env = 'uat';
+        if (env_master_id == 4)
+            env = 'prod';
+        return env;
+    }
+    const getDeployDurationForInfoMessage = (date1, date2) => {
+        const diffInMs = Math.abs(date2 - date1);
+        console.log("diffInMs", diffInMs)
+        return diffInMs;
+    }
+
+    function getChildBuildLabel(label) {
+        console.log(label, "sdbvhsbvjhfbhj")
+        var data = label.split("-")
+        return data[data.length - 1]
+    }
+
+    return (<>
+        <SubHeader>
+            <label className='deployment-name' title={informationData.deploy_args_key_value ? informationData.deploy_args_key_value.deployment_name : ""}>
+                {
+                    task_type == "Build" || task_type == "Global Build" ?
+                        informationData?.type_label ? `Child Build: ${getChildBuildLabel(informationData.type_label)}` : "Main Build"
+                        :
+                        task_type == "Promote" || task_type == "Global Promote" ?
+                            informationData?.type_label ? `Child Promote: ${informationData.type_label}` : "Main Promote"
+                            :
+                            informationData?.deploy_args_key_value?.deployment_name ? informationData.deploy_args_key_value.deployment_name : null
+                }<br />
+                <span className="font-11 env-name ">Env : <span>{env_name ? env_name : "NA"}</span></span>
+            </label>
+
+            {task_type == "Build" || task_type == "Promote" || task_type == "Global Build" || task_type == "Global Promote" ? null :
+
+
+                <Link target="_blank" className={"monitoring-icon"} to={{
+                    pathname : `/deployment-analytics`,
+                    search: `application_id=${component_task_instance.component.project}&service_id=${component_id}&service_name=${encodeURIComponent(component_task_instance.component.name)}&env_id=${component_env_id}&cd_id=${encodeURIComponent(informationData?.deploy_args_key_value?.deployment_name)}&env_name=${encodeURIComponent(env_name)}&env_type=${encodeURIComponent(getMasterLabel(env_master))}`
+                }} 
+                >
+                    <span className="ri-airplay-line vertical-align-super font-20" style={{color:"var(--color-white)"}}></span>
+                </Link>
+
+            }
+
+            <Link
+                to={"/logs?global_task_id=" + informationData.global_task_id +
+                    "&service_name=" + component_name +
+                    "&service_env=" + env_name +
+                    "&status=" + informationData.status +
+                    "&tab_id=" + informationData.id +
+                    "&num=" + activity_id
+                }
+                title="view logs"
+                target="_blank"
+                // onClick={showLogs} 
+                className="ri-file-fill"></Link>
+
+            <div
+                className={
+                    informationData?.status || informationData?.activity_status && informationData?.activity_status?.status ?
+                        informationData?.activity_status?.status == "SUCCESS" || informationData?.deployment_status == "SUCCESS" ?
+                            "status-div-11 green-text" :
+                            informationData?.activity_status?.status == "FAILED" || informationData?.deployment_status == "FAILED" ?
+                                "status-div-11 red-text" :
+                                informationData?.activity_status?.status == "IN_QUEUE" || informationData?.deployment_status == "IN_QUEUE" ?
+                                    "status-div-11 inqueue-text" :
+                                    informationData?.activity_status?.status == "STOPPED" || informationData?.deployment_status == "STOPPED" ?
+                                        "status-div-11 red-text" :
+                                        informationData?.activity_status?.status == "REVOKED" || informationData?.deployment_status == "REVOKED" ?
+                                            "status-div-11 purple-text" :
+                                            "status-div-11 yellow-text" : "status-div-11 primary-text"}>&nbsp;{informationData?.activity_status ? informationData?.activity_status?.status : informationData?.deployment_status}&nbsp;</div>
+
+            <Tooltip
+                title={informationData.status == "RUNNING" || informationData.status == "IN_QUEUE" ? '0s' : (time_taken || 'N/A')}
+                placement="top"
+                arrow
+                PopperProps={{ style: { zIndex: 9999 } }}
+            >
+                <div className="duration" style={{ maxWidth: 'var(--space-80)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'default' }}>
+                    {informationData.status == "RUNNING" || informationData.status == "IN_QUEUE" ? '0s' : time_taken}
+                </div>
+            </Tooltip>
+            {
+                open ?
+                    <div className="ri-arrow-up-s-line" onKeyDown={()=>{}} onClick={() => toggleView(null)} role="button" tabIndex={0}></div> :
+                    <div className="ri-arrow-down-s-line" onKeyDown={()=>{}} onClick={() => toggleView(informationData.id)} role="button" tabIndex={0}></div>
+            }
+        </SubHeader>
+
+
+
+        {
+            open &&
+            <>
+                {informationData ?
+                    informationData.activity.map(activity => (
+               <Tooltip     
+                            key={activity.activity_sub_task}
+                            placement="top"
+                            arrow={false}
+                            PopperProps={{
+                                style: { zIndex: 9999 },
+                                anchorEl: {
+                                    getBoundingClientRect: () => ({
+                                        top: mouseY,
+                                        left: mouseX,
+                                        bottom: mouseY,
+                                        right: mouseX,
+                                        width: 0,
+                                        height: 0,
+                                    }),
+                                },
+                            }}
+                            componentsProps={{
+                                tooltip: {
+                                    sx: {
+                                        backgroundColor: 'rgba(255, 255, 255, 0.85) !important',
+                                        backdropFilter: 'blur(var(--space-8)) !important',
+                                        WebkitBackdropFilter: 'blur(var(--space-8)) !important',
+                                        color: '#2f2f2f !important',
+                                        boxShadow: '0 var(--space-8) var(--space-32) rgba(0,0,0,0.15), 0 var(--space-2) var(--space-8) rgba(0,0,0,0.08) !important',
+                                        borderRadius: 'var(--space-10) !important',
+                                        border: 'var(--space-1) solid rgba(255,255,255,0.6) !important',
+                                        padding: 'var(--space-12) var(--space-16) !important',
+                                        maxWidth: 'none !important',
+                                        transition: 'none !important',
+                                    }
+                                },
+                                popper: {
+                                    sx: {
+                                        pointerEvents: 'none !important',
+                                        '& .MuiTooltip-tooltip': {
+                                            backgroundColor: 'rgba(255, 255, 255, 0.85) !important',
+                                            backdropFilter: 'blur(var(--space-8)) !important',
+                                            color: '#2f2f2f !important',
+                                            border: 'var(--space-1) solid rgba(255,255,255,0.6) !important',
+                                        },
+                                    },
+                                },
+                            }}
+                            title={
+                                <div style={{ padding: 'var(--space-2) 0', minWidth: 'var(--space-180)' }}>
+                                    <div style={{ fontWeight: 700, fontSize: 'var(--font-13)', marginBottom: 'var(--space-10)', color: '#1a1a1a', borderBottom: '1px solid rgba(0,0,0,0.08)', paddingBottom: '6px' }}>
+                                        {activity.activity_sub_task}
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-9)', marginBottom: 'var(--space-6)' }}>
+                                        <span style={{
+                                            width: 'var(--space-10)', height: 'var(--space-10)', borderRadius: '50%', flexShrink: 0,
+                                            backgroundColor:
+                                                activity.status.toLowerCase() === 'success' ? 'var(--color-success-500)' :
+                                                activity.status.toLowerCase() === 'failed' ? 'var(--color-error-500)' :
+                                                activity.status.toLowerCase() === 'stopped' ? 'var(--color-error-500)' :
+                                                activity.status.toLowerCase() === 'revoked' ? 'var(--color-badge-purple-text)' :
+                                                activity.status.toLowerCase() === 'skipped' ? 'var(--color-secondary-500)' : 'var(--color-secondary-500)',
+                                            boxShadow:
+                                                activity.status.toLowerCase() === 'success' ? '0 0 0 var(--space-2) #4caf5033' :
+                                                activity.status.toLowerCase() === 'failed' ? '0 0 0 var(--space-2) #e5393533' :
+                                                activity.status.toLowerCase() === 'stopped' ? '0 0 0 var(--space-2) #e5393533' :
+                                                activity.status.toLowerCase() === 'revoked' ? '0 0 0 var(--space-2) #9c27b033' :
+                                                activity.status.toLowerCase() === 'skipped' ? '0 0 0 var(--space-2) #ff980033' : '0 0 0 var(--space-2) #ff980033',
+                                        }} />
+                                        <span style={{ fontSize: 'var(--font-12)', color: '#505050' }}>Status: <strong style={{ color: '#2f2f2f', marginLeft: 'var(--space-2)' }}>{activity.status.toLowerCase()}</strong></span>
+                                    </div>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-9)' }}>
+                                        <span style={{ width: 'var(--space-10)', height: 'var(--space-10)', borderRadius: '50%', flexShrink: 0, backgroundColor: 'var(--color-tertiary-500)', boxShadow: '0 0 0 var(--space-2) #2196f333' }} />
+                                        <span style={{ fontSize: 'var(--font-12)', color: '#505050' }}>Duration: <strong style={{ color: '#2f2f2f', marginLeft: 'var(--space-2)' }}>{activityDetailsDuration(activity)}</strong></span>
+                                    </div>
+                                </div>
+                            }
+                        >
+                            <div
+                                className="steps-list"
+                                style={{ cursor: 'pointer' }}
+                                onMouseMove={(e) => {
+                                    const x = e.clientX + 14;
+                                    const y = e.clientY - 10;
+                                    if (mouseMoveTimer.current) cancelAnimationFrame(mouseMoveTimer.current);
+                                    mouseMoveTimer.current = requestAnimationFrame(() => {
+                                        setMouseX(x);
+                                        setMouseY(y);
+                                    });
+                                }}
+                            >
+                                {getSymbol(activity)}
+                                <div className="service" style={{ maxWidth: 'var(--space-140)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{activity.activity_sub_task}:</div>
+                                <div
+                                    className={activity.status.toLowerCase() == "success" ?
+                                        "status-div green-text" :
+                                        activity.status.toLowerCase() == "failed" ?
+                                            "status-div red-text d-flex align-center" :
+                                            activity.status.toLowerCase() == "stopped" ? "status-div red-text d-flex align-center" : "status-div yellow-text"}>
+                                    &nbsp;{activity.status.toLowerCase()}&nbsp;
+                                </div>
+                                <div style={{ maxWidth: 'var(--space-100)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    Duration: {activityDetailsDuration(activity)}
+                                </div>
+                                {
+                                    activity.status_file_path ?
+                                        <a target="_blank" href={activity.status_file_path}><span className="ri-link" style={{ color: 'var(--color-white)' }}></span></a> : null
+                                }
+                            </div>
+                        </Tooltip>
+                    )) : null
+                }
+                {informationData ?
+                    informationData.env_integration_detail ?
+                        <>
+                            {
+                                state.data.status && state.data.status === "RUNNING" || state.data.status && state.data.status === "STOPPED" ?
+                                    <>
+                                        {informationData.env_integration_detail.stopped && state.data.status === "STOPPED" ?
+                                            <div className="steps-list">
+                                                <p className='service-des'>
+                                                    The pipeline will remain paused till we receive a response post integration testing
+                                                </p>
+                                            </div>
+                                            : null
+                                        }
+
+                                    </>
+                                    : null
+                            }
+                        </>
+                        : null : null
+                }
+                {/* { informationData.build_args_key_value &&
+                    <Footer >
+                        <span className="tag-image">Branch: : {informationData.build_args_key_value ? informationData.build_args_key_value?.branch_name : "NA"}</span>
+                    </Footer>
+                } */}
+
+                <Footer >
+                    {!informationData?.suspend &&
+                        <div className="d-flex align-center gap-8" style={{ width: 'fit-content', margin: 'auto' }}>
+                            <span className="tag-image">Artifact:  {informationData.build_tag ? informationData.build_tag : informationData.deploy_tag ? informationData.deploy_tag : informationData.rollback_tag ? informationData.rollback_tag : informationData.target_image_tag ? informationData.target_image_tag : informationData.target_artifact_tag ? informationData.target_artifact_tag : "N/A"}</span>
+                            {informationData.is_compliance_tag === "COMPLIANCE" ? (
+                                <Tooltip title="Compliant tag">
+                                    <img src="/images/shield-check-line-com-pipe.svg" alt="Compliant" />
+                                </Tooltip>
+                            ) : informationData.is_compliance_tag === "NON_COMPLIANCE" ? (
+                                <Tooltip title="Non-compliant tag">
+                                    <img src="/images/shield-check-line-non-comp-pipeline.svg" alt="Non-compliant" />
+                                </Tooltip>
+                            ) : null}
+                        </div>
+                    }
+                    {informationData?.build_args_key_value ?
+                        <p className="tag-image">Branch : {informationData.build_args_key_value ? informationData.build_args_key_value.branch_name : "NA"}</p>
+                        : null}
+                </Footer>
+
+                {
+                    anchorEl && informationData?.deploy_number &&
+                    <div
+                        className={classes.pop_over}
+                        style={{}}
+                    >
+                        <div>
+
+                            {
+                                component_env_id &&
+                                <PipelineDeployStatus
+                                    variant={component_task_instance.status == "RUNNING" &&
+                                        getDeployDurationForInfoMessage(new Date(component_task_instance.activity_status.start_time), new Date()) > 100 ? "running_card_pipeline" :
+                                        component_task_instance.status == "FAILED" ? 'failed_card_pipeline' : "success_running"
+                                    }
+                                    application_id={component_task_instance.component.project}
+                                    service_id={component_id}
+                                    env_id={component_env_id}
+                                    env_name={env_name}
+                                    cd_id={informationData?.deploy_args_key_value?.deployment_name}
+                                    service_data={{ name: component_task_instance.component.name, type: getMasterLabel(env_master) }}
+                                    env_details={manual_deploy_flag}
+                                    handleClosePopover={handleClose}
+                                />
+                            }
+                        </div>
+                    </div>
+                }
+            </>
+        }
+
+    </>)
+}
+
+MultipleDeploymentCard.propTypes = {
+    ...PropTypes.objectOf(PropTypes.any),
+};
+
+export default MultipleDeploymentCard;
+
+const SubHeader = styled('div')({
+    display: 'flex',
+    alignItems: 'center',
+    padding: 'var(--space-5) var(--space-15)',
+    background: 'var(--color-info-600)',
+    borderBottom: 'var(--space-1) solid #badcde',
+    '& .deployment-name': {
+        lineHeight: 'var(--line-height-18)',
+        fontSize: 'var(--font-12)',
+        color: 'var(--color-white)',
+        margin: 'var(--space-0) var(--space-5)',
+        width: 'var(--space-140)',
+        textOverflow: 'ellipsis',
+        overflow: 'hidden',
+        whiteSpace: 'nowrap'
+    },
+    '& .env-name': {
+        color: 'var(--color-border-grey)',
+        lineHeight: 'var(--line-height-18)',
+        fontSize: 'var(--font-12)',
+        //color: 'var(--color-white)',
+        //margin: 'var(--space-0) var(--space-5)',
+        width: 'var(--space-140)',
+        textOverflow: 'ellipsis',
+        overflow: 'hidden',
+        whiteSpace: 'nowrap'
+    },
+    '& .ri-arrow-up-s-line': {
+        justifySelf: 'flex-end',
+        cursor: 'pointer',
+        marginLeft: 'auto',
+        color: 'var(--color-white)',
+        transition: 'all .3s ease',
+        fontSize: 'var(--font-16) !important'
+    },
+    '& .ri-arrow-down-s-line': {
+        justifySelf: 'flex-end',
+        cursor: 'pointer',
+        marginLeft: 'auto',
+        color: 'var(--color-white)',
+        transition: 'all .3s ease',
+        fontSize: 'var(--font-16) !important'
+    },
+    //
+    "& .ri-file-fill": {
+        color: 'var(--color-white)',
+        cursor: 'pointer',
+        margin: 'var(--space-0) var(--space-8)',
+        fontSize: 'var(--font-14) !important'
+    },
+    '& .ri-calendar-event-fill': {
+        color: 'var(--color-info-300)',
+        fontSize: 'var(--font-16)!important'
+    },
+    '& .running': {
+        color: "var(--color-secondary-500)!important"
+    },
+    '& .service': {
+        lineHeight: 'var(--line-height-18)',
+        fontSize: 'var(--font-12)',
+        color: 'var(--color-white)',
+        margin: 'var(--space-0) var(--space-5)',
+        width: 'var(--space-140)',
+        textOverflow: 'ellipsis',
+        overflow: 'hidden',
+        whiteSpace: 'nowrap'
+    },
+    '& .service-des': {
+        lineHeight: 'var(--line-height-18)',
+        fontSize: 'var(--font-12)',
+        color: 'var(--color-white)',
+        margin: 'var(--space-0) var(--space-5)',
+    },
+    '& .status-div': {
+        fontSize: 'var(--font-12)',
+    },
+    '& .status-div-11': {
+        fontSize: 'var(--font-10)',
+    },
+    '& .status-div.green': {
+        backgroundColor: 'inherit',
+        color: 'var(--color-success-300)'
+    },
+    '& .duration': {
+        color: 'var(--color-white)',
+        fontSize: 'var(--font-12)',
+        margin: 'var(--space-0) var(--space-5)',
+        whiteSpace: 'nowrap'
+    },
+    '& .ri-check-fill': {
+        color: 'var(--color-success-300)'
+    }
+})
+
+
+const Footer = styled('div')({
+    // display: 'flex',
+    // alignItems: 'center',
+    padding: 'var(--space-10) var(--space-15)',
+    fontSize: 'var(--font-12)',
+    color: 'var(--color-white)',
+    textAlign: 'center',
+    // justifyContent: 'center',
+    background: 'var(--color-info-500)',
+    borderBottom: 'var(--space-1) solid #badcde',
+    '& .artifact-name': {
+        color: 'var(--color-primary-200)',
+        display: 'none'
+    }
+})
+const usePopOverStyles = makeStyles(() => ({
+    pop_over: {
+        position: 'absolute',
+        left: 'var(--space-320)',
+        top: 'calc(var(--space-48) * -1)',
+        zIndex: 999
+    }
+}));
