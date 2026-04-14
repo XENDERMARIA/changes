@@ -1,0 +1,1959 @@
+import React, { useEffect, useState } from "react";
+import { makeStyles } from "@mui/styles";
+import PageHeader from "../../../components/PageHeader";
+import Chip from "../../../components/chip/Chip";
+import { Box, dividerClasses, Popover } from "@mui/material";
+import NewChip from "../../../components/newChip/NewChip";
+import PaginationTwo from "../../../components/PaginationTwo";
+import InvokeApi, { PostData } from "../../../util/apiInvoker";
+import properties from "../../../properties/properties";
+import GenerateURL, { GenerateSearchURL } from "../../../util/APIUrlProvider";
+import { Link, useNavigate, useParams, useLocation } from "react-router-dom";
+import BlankPage from "../../../components/BlankPage";
+import { useCustomSnackbar } from "../../../contexts/SnackbarContext";
+import GenericSkeleton from "../../../components/genericComponents/Skeletons/GenericSkeleton";
+import Delete from "../../../components/genericComponents/Delete";
+import AddSingleVMDialog from "./AddVirtualMachineSet/AddSingleVMDialog";
+import AddVirtualMachineCSV from "./AddVirtualMachineSet/AddVirtualMachineCSV";
+import FetchPublicKeyDialog from "./AddVirtualMachineSet/FetchPublicKeyDialouge";
+import EnvChip from "./EnvChip";
+import VMSetHealthDialog from "./AddVirtualMachineSet/VMSetHealthDialog";
+import ShowActivityStatusFramework from "./AddVirtualMachineSet/ShowActivityStatusFramework";
+import AdvanceSearchFilterCombo from "../../../components/genericComponents/AdvanceSearchFilter/AdvanceSearchFilterCombo";
+import Tooltip from '@mui/material/Tooltip';
+import Button from "../../../components/genericComponents/Button";
+import { safeNavigateBack, showErrorHandlerUpdated } from "../../../util/util";
+
+const iteration_count = 3;
+
+const useStyles = makeStyles(() => ({
+  root: {
+    backgroundColor: "var(--color-white)",
+    padding: "var(--space-12)",
+    minHeight: "calc(100vh - 70px)",
+
+    "& .table-view": {
+      marginTop: "var(--space-20)",
+      border: "var(--space-1) solid var(--color-badge-grey-bg)",
+      borderRadius: "var(--radius-6)",
+      display: "grid",
+      gridTemplateColumns: "15% 25% 25% 12% 10% 13%",
+      color: "var(--color-content-tertiary)",
+      fontSize: "var(--font-12)",
+      overflow: "hidden",
+
+      "& .table-view-row": {
+        borderBottom: "var(--space-1) solid #E6E6E6",
+        padding: "var(--space-18) var(--space-9)",
+        display: "flex",
+        alignItems: "center",
+        color: "var(--color-content-primary)",
+        fontSize: "var(--font-12)",
+        fontWeight: 'var(--font-weight-600)',
+        overflow: "hidden",
+        minWidth: 0,
+        "&:nth-last-child(-n+6)": {
+          borderBottom: "none",
+        },
+      },
+
+      "& .table-view-row-header": {
+        borderBottom: "var(--space-1) solid #E6E6E6",
+        padding: "var(--space-9-5) var(--space-12)",
+        display: "flex",
+        alignItems: "center",
+        fontSize: "var(--font-12)",
+        justifyContent: "flex-start",
+        fontWeight: 'var(--font-weight-600)',
+        color: "var(--color-content-primary)",
+      },
+      "& .add_primary_tag": {
+        display: "flex",
+        flexDirection: "row",
+        alignItems: "center",
+        flexWrap: "wrap",
+        gap: "var(--space-4)",
+        maxWidth: "100%",
+        overflow: "hidden",
+      },
+    },
+  },
+  header: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: "var(--space-32)",
+    backgroundColor: "var(--color-white)",
+  },
+
+  titleWrapper: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: "var(--space-8)",
+  },
+
+  title: {
+    fontSize: "var(--font-16)",
+    fontWeight: 'var(--font-weight-600)',
+    color: "var(--color-content-primary)",
+    marginLeft: "var(--space-18)",
+  },
+
+  actions: {
+    display: "flex",
+    gap: "var(--space-12)",
+  },
+
+  vmHeader: {
+    display: "flex",
+    alignItems: "center",
+  },
+  vmHeaderEnvTitle: {
+    display: "flex",
+    alignItems: "center",
+    gap: "var(--space-8)",
+  },
+
+  actionButtonGroup: {
+    display: "flex",
+    alignItems: "center",
+    gap: "var(--space-8)",
+    padding: "var(--space-5) var(--space-7)",
+  },
+
+  testButton: {
+    padding: "var(--space-4) var(--space-8)",
+    borderRadius: "var(--radius-4)",
+    fontSize: "var(--font-11)",
+    fontWeight: 'var(--font-weight-500)',
+    border: "var(--space-1) solid var(--color-primary-200)",
+    backgroundColor: "transparent",
+    color: "var(--color-primary-500)",
+    cursor: "pointer",
+    transition: "all 0.2s ease",
+    "&:hover": {
+      backgroundColor: "var(--color-tertiary-500)",
+      color: "var(--color-white)",
+    },
+    "&:active": {
+      transform: "scale(0.95)",
+    },
+  },
+
+  iconButton: {
+    width: "var(--space-28)",
+    height: "var(--space-28)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: "var(--radius-full)",
+    border: "none",
+    color: "var(--color-content-tertiary)",
+    backgroundColor: "transparent",
+    cursor: "pointer",
+    "&:hover": {
+      backgroundColor: "var(--color-grey-100)",
+    },
+  },
+
+  moreButton: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: "var(--radius-4)",
+    border: "none",
+    backgroundColor: "transparent",
+    color: "var(--color-content-secondary)",
+    cursor: "pointer",
+    transition: "all 0.2s ease",
+    "&:hover": {
+      backgroundColor: "var(--color-grey-100)",
+    },
+  },
+
+  moreButtonActive: {
+    borderColor: "var(--color-tertiary-500)",
+    backgroundColor: "var(--color-pastel-blue-3)",
+    color: "var(--color-tertiary-500)",
+  },
+
+  filterContainer: {
+    display: "flex",
+    marginBottom: "var(--space-20)",
+    width: "100%",
+    padding: "var(--space-16)",
+    alignItems: "center",
+    wrap: "nowrap",
+    gap: "var(--space-10)",
+  },
+
+  filterLeft: {
+    display: "flex",
+    alignItems: "center",
+    gap: "var(--space-12)",
+    flexWrap: "wrap",
+  },
+
+  resetButton: {
+    paddingLeft: "var(--space-15)" ,
+    marginLeft: "var(--space-7)",
+    display: "flex",
+    alignItems: "center",
+    whiteSpace: "nowrap",
+    justifyContent: "center",
+    cursor: "pointer",
+    borderLeft: "var(--space-1) solid #dedede",
+    height: "var(--space-40)",
+  },
+}));
+
+const useStylesPopover = makeStyles((theme) => ({
+  popover: {
+    width: "auto",
+    minWidth: "var(--space-140)",
+    display: "flex",
+    padding: "var(--space-6)",
+    flexDirection: "column",
+    alignItems: "stretch",
+    gap: "var(--space-2)",
+    borderRadius: "var(--radius-6)",
+    border: "var(--space-1) solid var(--color-grey-100)",
+    background: "var(--color-white)",
+    boxShadow: "var(--space-0) var(--space-4) var(--space-12) var(--space-0) rgba(0, 0, 0, 0.08)",
+    "& .menu-link": {
+      color: "var(--color-content-secondary)",
+      width: "100%",
+      textAlign: "left",
+      display: "flex",
+      alignItems: "center",
+      gap: "var(--space-6)",
+      padding: "var(--space-6) var(--space-8)",
+      borderRadius: "var(--radius-4)",
+      transition: "background-color 0.2s",
+      "&:hover": {
+        backgroundColor: "var(--color-grey-100)",
+      },
+      "&:visited": {
+        color: "var(--color-content-secondary)",
+      },
+    },
+  },
+  menuItem: {
+    padding: "0",
+    width: "100%",
+  },
+}));
+
+const PopoverDropdown = ({
+  name,
+  id,
+  handleRefresh,
+  handleOpenDialog,
+  handleOpenFetchKeyDialog,
+  classes,
+}) => {
+  const popoverClasses = useStylesPopover();
+  const [anchorEl, setAnchorEl] = useState(null);
+
+  const handleClick = (event) => {
+    setAnchorEl(event.currentTarget);
+  };
+
+  const handleClose = () => {
+    setAnchorEl(null);
+  };
+
+  const open = Boolean(anchorEl);
+
+  return (
+    <>
+      <button
+        type="button"
+        className={`${classes.moreButton} ${open ? classes.moreButtonActive : ""
+          }`}
+        onClick={handleClick}
+      >
+        <span className="ri-more-2-fill font-22"></span>
+      </button>
+
+      <Popover
+        open={open}
+        anchorEl={anchorEl}
+        onClose={handleClose}
+        anchorOrigin={{
+          vertical: "bottom",
+          horizontal: "center",
+        }}
+        transformOrigin={{
+          vertical: "top",
+          horizontal: "center",
+        }}
+        PaperProps={{
+          style: {
+            overflow: "visible",
+            marginTop: "var(--space-10)",
+            borderRadius: "var(--radius-6)",
+          },
+        }}
+      >
+        <div className={popoverClasses.popover}>
+          <button
+            type="button"
+            className="menu-link font-12 cursor-pointer"
+            style={{
+              backgroundColor: "transparent",
+              boxShadow: "none",
+              border: "none",
+            }}
+            onClick={() => {
+              handleOpenDialog(id);
+              handleClose();
+            }}
+          >
+            <span className="ri-edit-line"></span>
+            <span>Edit</span>
+          </button>
+
+          <div
+            className="font-12 cursor-pointer"
+            style={{
+              padding: "var(--space-6) var(--space-8)",
+            }}
+          >
+            <Delete
+              varient="new_ui_versioning"
+              display_data_name={name}
+              data={{
+                entity_id: id,
+                name: "add_virtual_machine",
+                label: "virtual machine",
+              }}
+              refresh={handleRefresh}
+              api_link={GenerateURL(
+                { edit_id: id },
+                properties.api.edit_single_vm,
+              )}
+              onCloseParentMenu={handleClose}
+            />
+          </div>
+
+          <button
+            type="button"
+            className="menu-link font-12 cursor-pointer"
+            style={{
+              backgroundColor: "transparent",
+              boxShadow: "none",
+              border: "none",
+            }}
+            onClick={() => {
+              handleOpenFetchKeyDialog();
+              handleClose();
+            }}
+          >
+            <span className="ri-key-line"></span>
+            <span>Fetch Public Key</span>
+          </button>
+        </div>
+      </Popover>
+    </>
+  );
+};
+
+const SkeletonRow = () => {
+  return (
+    <>
+      <div className="table-view-row">
+        <GenericSkeleton
+          variant={"rect"}
+          width={"auto"}
+          height={"34px"}
+          style={{ borderRadius: "var(--radius-4)" }}
+        />
+      </div>
+      <div className="table-view-row">
+        <GenericSkeleton
+          variant={"rect"}
+          width={"auto"}
+          height={"34px"}
+          style={{ borderRadius: "var(--radius-4)" }}
+        />
+      </div>
+      <div className="table-view-row">
+        <GenericSkeleton
+          variant={"rect"}
+          width={"auto"}
+          height={"34px"}
+          style={{ borderRadius: "var(--radius-4)" }}
+        />
+      </div>
+      <div className="table-view-row">
+        <GenericSkeleton
+          variant={"rect"}
+          width={"auto"}
+          height={"34px"}
+          style={{ borderRadius: "var(--radius-4)" }}
+        />
+      </div>
+      <div className="table-view-row">
+        <GenericSkeleton
+          variant={"rect"}
+          width={"auto"}
+          height={"34px"}
+          style={{ borderRadius: "var(--radius-4)" }}
+        />
+      </div>
+      <div className="table-view-row">
+        <GenericSkeleton
+          variant={"rect"}
+          width={"auto"}
+          height={"34px"}
+          style={{ borderRadius: "var(--radius-4)" }}
+        />
+      </div>
+    </>
+  );
+};
+
+export default function VirtualMachineStatus() {
+  const classes = useStyles();
+  const { vm_group_id } = useParams();
+  const { id } = useParams();
+  const history = useNavigate();
+  const location = useLocation();
+  const { showSnackbar } = useCustomSnackbar();
+  const [editedItem, setEditedItem] = useState(null);
+
+  const [fetchKeyDialogState, setFetchKeyDialogState] = useState({
+    open: false,
+    user_name: "",    // ← was vm_name
+    ip_address: "",
+  });
+
+  // Default filters that are always visible
+  const defaultFilters = ["vm_name", "primary_tag", "ip_address"];
+
+  const safeAccess = (obj, path, defaultValue = null) => {
+    return path.split('.').reduce((acc, part) => acc?.[part], obj) ?? defaultValue;
+  };
+
+  const safeArray = (value) => Array.isArray(value) ? value : [];
+  const navigate = useNavigate();
+
+  const [state, setState] = useState({
+    data: {},
+    error: {},
+    master_envs_list: [],
+    selectedMasterEnv: [],
+    parent_state: null,
+    vm_arr: [],
+    validations: {},
+    curr_page: 1,
+    total_page: 0,
+    count: 0,
+    next: null,
+    previous: null,
+    loading_vms: true,
+    edit_state_loading: false,
+    env_data_loading: false,
+    moreAdvFilterList: defaultFilters,
+    advFilters: {
+      vm_name: [],
+      primary_tag: [],
+      secondary_tag: [],
+      ip_address: [],
+      status: [],
+    },
+    resetCount: 0,
+    is_filters_applied: false,
+    singleVmChildState: null,
+  });
+
+  console.log("state", state.data);
+  useEffect(() => {
+    if (id) {
+      fetchVMGroupDataAndSetState(id);
+    }
+  }, [id]);
+
+  useEffect(() => {
+    resetAdvFilter();
+  }, [location.pathname]);
+
+  useEffect(() => {
+    isFiltersApplied();
+  }, [state.advFilters]);
+
+  useEffect(() => {
+    if (state?.data?.environment_master_type && state?.master_envs_list) {
+      try {
+        const envTypes = safeArray(state.data.environment_master_type);
+        const envList = safeArray(state.master_envs_list);
+
+        const filteredEnvs = envList.filter((item) =>
+          envTypes.includes(item?.order),
+        );
+
+        setState((new_state) => ({
+          ...new_state,
+          selectedMasterEnv: filteredEnvs,
+        }));
+      } catch (error) {
+        console.error("Error filtering environments:", error);
+      }
+    }
+  }, [state.master_envs_list, state.data.environment_master_type]);
+
+  useEffect(() => {
+    fetchMasterEnvList();
+  }, []);
+
+  // Load filters from URL on mount
+
+  useEffect(() => {
+    try {
+      const urlSearchParams = new URLSearchParams(location.search);
+
+      if (urlSearchParams.size !== 0) {
+        let moreAdvFilter = [...defaultFilters];
+        let advFilters = {};
+
+        urlSearchParams.forEach((value, key) => {
+          if (!value) return;
+
+          try {
+            if (key === "adv_search") {
+              const updatedList = value.split(",").filter(Boolean);
+              moreAdvFilter = [...new Set([...moreAdvFilter, ...updatedList])];
+            } else if (!["limit", "offset"].includes(key)) {
+              advFilters[key] = value.split(",").filter(Boolean);
+            }
+          } catch (err) {
+            console.error(`Error parsing URL param ${key}:`, err);
+          }
+        });
+
+        setState((prevState) => ({
+          ...prevState,
+          moreAdvFilterList: moreAdvFilter,
+          advFilters: {
+            ...prevState.advFilters,
+            ...advFilters,
+          },
+        }));
+
+        if (id) {
+          fetchVMsWithFilters(id, 1, advFilters, moreAdvFilter);
+        }
+      } else if (id) {
+        fetchVmOfVMGroups(id, 1);
+      }
+    } catch (error) {
+      console.error("Error parsing URL parameters:", error);
+      if (id) {
+        fetchVmOfVMGroups(id, 1);
+      }
+    }
+  }, [id, location.search]);
+
+  const [openCSVDialog, setOpenCSVDialog] = useState(false);
+  const [open, setOpen] = useState({ open: false, clear_form_flag: false });
+  const [openHealthDialog, setOpenHealthDialog] = useState(false);
+  const [selectedVMForHealth, setSelectedVMForHealth] = useState(null);
+  const [taskId, setTaskId] = useState(null);
+
+  const handleClickOpen = (doClearForm) => {
+    setEditedItem(null);
+    setState((prev) => ({ ...prev, singleVmChildState: null }));
+    setOpen((prev_state) => ({
+      ...prev_state,
+      open: true,
+      clear_form_flag: doClearForm,
+    }));
+  };
+
+  const handleClickClose = () => {
+    setOpen((prev_state) => ({
+      ...prev_state,
+      open: false,
+    }));
+  };
+  const getDataAndSetToState = (data) => { };
+  const handleCloseDialogAndFetchVMs = () => {
+    console.log(state.parent_state, "jkdjsjfadfjka");
+    if (state.parent_state && state.parent_state.id) {
+      fetchVmGroups(state.parent_state.id);
+    }
+    setState((new_state) => ({
+      ...new_state,
+      selectedTab: 2,
+      data: {},
+      error: {},
+    }));
+  };
+
+  const handleClickSSHKeyDialog = () => {
+    handleClickClose();
+  };
+
+  const fetchVmGroups = (id) => {
+    var requestInfo = {
+      endPoint: GenerateURL(
+        { edit_id: id },
+        properties.api.edit_vm_group + "?vm_sets=true",
+      ),
+      httpMethod: "GET",
+      httpHeaders: { "Content-Type": "application/json" },
+    };
+
+    InvokeApi(
+      requestInfo,
+      fetchVMGroupDataAndSuccess,
+      fetchVMGroupDataAndFailed,
+    );
+    setState((new_state) => ({
+      ...new_state,
+      loading_vms: true,
+    }));
+  };
+
+  const fetchVmOfVMGroups = (id, pageNumber = 1) => {
+    setState((new_state) => ({
+      ...new_state,
+      loading_vms: true,
+    }));
+
+    const limit = 6;
+    const offset = (pageNumber - 1) * limit;
+
+    var requestInfo = {
+      endPoint: GenerateURL(
+        { edit_id: id },
+        properties.api.edit_vm_group + `?vm_sets=true`,
+      ),
+      httpMethod: "GET",
+      httpHeaders: { "Content-Type": "application/json" },
+    };
+
+    InvokeApi(
+      requestInfo,
+      (data) => fetchVMGroupDataAndSuccess(data, pageNumber),
+      fetchVMGroupDataAndFailed,
+    );
+  };
+
+  const fetchVMsWithFilters = (
+    id,
+    pageNumber = 1,
+    filters = null,
+    activeFilters = null,
+  ) => {
+    setState((new_state) => ({
+      ...new_state,
+      loading_vms: true,
+    }));
+
+    const limit = 6;
+    const offset = (pageNumber - 1) * limit;
+
+    const baseURL = GenerateURL(
+      { edit_id: id },
+      properties.api.edit_vm_group + `?vm_sets=true`,
+    );
+
+    const filtersToUse = filters || state.advFilters;
+    const activeFiltersToUse = activeFilters || state.moreAdvFilterList;
+
+    const resultURL = generateFilterURL(
+      baseURL,
+      filtersToUse,
+      activeFiltersToUse,
+    );
+
+    var requestInfo = {
+      endPoint: resultURL,
+      httpMethod: "GET",
+      httpHeaders: { "Content-Type": "application/json" },
+    };
+
+    InvokeApi(
+      requestInfo,
+      (data) => fetchVMGroupDataAndSuccess(data, pageNumber),
+      fetchVMGroupDataAndFailed,
+    );
+  };
+
+  // Generate URL with filters
+  const generateFilterURL = (baseURL, listDict, activeFilters) => {
+    try {
+      if (!baseURL) return "";
+
+      let searchParams = new URLSearchParams();
+
+      // Extract existing params from baseURL if it has query string
+      if (baseURL.includes("?")) {
+        const [url, queryString] = baseURL.split("?");
+        const existingParams = new URLSearchParams(queryString);
+        existingParams.forEach((value, key) => {
+          searchParams.append(key, value);
+        });
+        baseURL = url;
+      }
+
+      // Add filter params with null checks
+      const filtersKeyArray = Object.keys(listDict || {});
+      filtersKeyArray.forEach((key) => {
+        try {
+          const arrayFilterValues = safeArray(listDict[key]);
+          if (
+            arrayFilterValues.length > 0 &&
+            isFilterActive(key, activeFilters)
+          ) {
+            const arrayString = arrayFilterValues.join(",");
+            searchParams.set(key, arrayString);
+          }
+        } catch (err) {
+          console.error(`Error processing filter ${key}:`, err);
+        }
+      });
+
+      const queryString = searchParams.toString();
+      return queryString ? `${baseURL}?${queryString}` : baseURL;
+    } catch (error) {
+      console.error("Error generating filter URL:", error);
+      return baseURL || "";
+    }
+  };
+
+  const isFilterActive = (filterKey, list) => {
+    return safeArray(list).find((name) => filterKey === name);
+  };
+
+  function isFiltersApplied() {
+    try {
+      let count = 0;
+      const filters = state?.advFilters || {};
+
+      Object.keys(filters).forEach((item) => {
+        if (safeArray(filters[item]).length > 0) {
+          count = count + 1;
+        }
+      });
+
+      setState((new_state) => ({
+        ...new_state,
+        is_filters_applied: count > 0,
+      }));
+    } catch (error) {
+      console.error("Error checking filters:", error);
+    }
+  }
+
+  const fetchVMGroupDataAndSuccess = (data, currentPage) => {
+    try {
+      // Safely access nested data
+      const vmArray = data?.results || data || [];
+      const totalCount =
+        data?.count ?? (Array.isArray(vmArray) ? vmArray.length : 0);
+
+      // Ensure vmArray is always an array
+      const validVmArray = Array.isArray(vmArray) ? vmArray : [];
+
+      setState((new_state) => ({
+        ...new_state,
+        vm_arr: validVmArray,
+        loading_vms: false,
+        curr_page: currentPage || 1,
+        total_page: Math.ceil(totalCount / 6) || 0,
+        count: totalCount,
+        next: data?.next || null,
+        previous: data?.previous || null,
+      }));
+    } catch (error) {
+      console.error("Error processing VM data:", error);
+      showSnackbar("Error processing VM data", "error");
+      setState((new_state) => ({
+        ...new_state,
+        vm_arr: [],
+        loading_vms: false,
+      }));
+    }
+  };
+
+  const fetchVMGroupDataAndFailed = (error) => {
+    showSnackbar(error?.message || "Failed to fetch VM data", "error");
+    setState((new_state) => ({
+      ...new_state,
+      error_vm_arr: error?.message || "Failed to fetch VM data",
+      loading_vms: false,
+    }));
+  };
+
+  const fetchVMGroupDataAndSetState = (id) => {
+    setState((new_state) => ({
+      ...new_state,
+      edit_state_loading: true,
+    }));
+
+    var requestInfo = {
+      endPoint: GenerateURL({ edit_id: id }, properties.api.edit_vm_group),
+      httpMethod: "GET",
+      httpHeaders: { "Content-Type": "application/json" },
+    };
+
+    InvokeApi(
+      requestInfo,
+      fetchVMGroupDataAndSetStateSuccess,
+      fetchVMGroupDataAndSetStateFailed,
+    );
+  };
+
+  const fetchVMGroupDataAndSetStateSuccess = (data) => {
+    try {
+      setState((new_state) => ({
+        ...new_state,
+        edit_state_loading: false,
+        parent_state: data || {},
+        data: {
+          ...new_state.data,
+          ...(data || {}),
+        },
+      }));
+    } catch (error) {
+      console.error("Error setting VM group data:", error);
+      showSnackbar("Error processing VM group data", "error");
+      setState((new_state) => ({
+        ...new_state,
+        edit_state_loading: false,
+      }));
+    }
+  };
+
+  const fetchVMGroupDataAndSetStateFailed = (error) => {
+    showSnackbar(error?.message || "Failed to fetch VM group data", "error");
+    setState((new_state) => ({
+      ...new_state,
+      edit_state_loading: false,
+      error_msg: error?.message || "Failed to fetch VM group data",
+    }));
+  };
+
+  function fetchMasterEnvList() {
+    setState((new_state) => ({
+      ...new_state,
+      env_data_loading: true,
+    }));
+
+    var requestInfo = {
+      endPoint: GenerateURL({}, properties.api.master_envs),
+      httpMethod: "GET",
+      httpHeaders: { "Content-Type": "application/json" },
+    };
+
+    InvokeApi(
+      requestInfo,
+      fetchMasterEnvListDataSuccess,
+      fetchMasterEnvListDataFailed,
+    );
+  }
+
+  function fetchMasterEnvListDataSuccess(data) {
+    try {
+      const envList = safeArray(data).map((item) => ({
+        tabName: item?.name || "Unknown",
+        order: item?.id || 0,
+      }));
+
+      setState((new_state) => ({
+        ...new_state,
+        master_envs_list: envList,
+        env_data_loading: false,
+      }));
+    } catch (error) {
+      console.error("Error processing master env list:", error);
+      showSnackbar("Error processing environment data", "error");
+      setState((new_state) => ({
+        ...new_state,
+        master_envs_list: [],
+        env_data_loading: false,
+      }));
+    }
+  }
+
+  function fetchMasterEnvListDataFailed(error) {
+    showSnackbar(
+      error?.message || "Failed to fetch master environments",
+      "error",
+    );
+    setState((new_state) => ({
+      ...new_state,
+      error: error,
+      env_data_loading: false,
+    }));
+  }
+
+  function fetchPageInfo(enteredPageNumber) {
+    fetchVMsWithFilters(id, enteredPageNumber);
+  }
+
+  const handleOpenFetchKeyDialog = (user_name, ip_address) => {
+    setFetchKeyDialogState({
+      open: true,
+      user_name,      // ← was vm_name
+      ip_address,
+    });
+  };
+
+  const handleCloseFetchKeyDialog = () => {
+    setFetchKeyDialogState({
+      open: false,
+      vm_name: "",
+      ip_address: "",
+    });
+  };
+
+  const handleHealthDialogOpen = (vmId) => {
+    setSelectedVMForHealth(vmId);
+    setOpenHealthDialog(true);
+  };
+
+  const handleHealthDialogClose = () => {
+    setOpenHealthDialog(false);
+    setSelectedVMForHealth(null);
+  };
+
+  const handleCloseStatusActivity = () => {
+    setTaskId(null);
+  };
+
+  const testConnectionApiHit = (data, index) => {
+    try {
+      if (!data?.id || index < 0 || index >= state.vm_arr.length) {
+        console.error("Invalid data or index for test connection");
+        return;
+      }
+
+      const updatedVmArr = [...state.vm_arr];
+      updatedVmArr[index] = { ...updatedVmArr[index], loading: true };
+      setState({ ...state, vm_arr: updatedVmArr });
+
+      const post_url = GenerateURL(
+        { edit_id: data.id },
+        properties.api.edit_single_vm,
+      );
+      showSnackbar("info", "Testing connection to virtual machine...");
+      PostData(post_url, data, (res) => onSaveSuccess(res, index), (err) => onSaveFail(err, index));
+    } catch (error) {
+      console.error("Error in test connection:", error);
+      showSnackbar("error", "Failed to test connection", error?.message);
+    }
+  };
+
+  const onSaveSuccess = (response, index) => {
+    try {
+      if (index >= 0 && index < state.vm_arr.length) {
+        const updatedVmArr = [...state.vm_arr];
+        updatedVmArr[index] = { ...updatedVmArr[index], loading: false };
+        setState({ ...state, vm_arr: updatedVmArr });
+      }
+
+      if (response?.task) {
+        setTaskId(response.task);
+      }
+      showSnackbar("success", "Connection tested successfully.");
+    } catch (error) {
+      console.error("Error in save success:", error);
+    }
+  };
+
+  const onSaveFail = (error, index) => {
+    if (index !== undefined && index >= 0 && index < state.vm_arr.length) {
+      const updatedVmArr = [...state.vm_arr];
+      updatedVmArr[index] = { ...updatedVmArr[index], loading: false };
+      setState((prevState) => ({
+        ...prevState,
+        test_api_data_loading: false,
+        vm_arr: updatedVmArr
+      }));
+    } else {
+      setState((prevState) => ({
+        ...prevState,
+        test_api_data_loading: false,
+      }));
+    }
+    const error_msg = showErrorHandlerUpdated(error);
+    showSnackbar("error", "Failed to test connection.", error_msg);
+  };
+
+  const setDataforEdit = (id) => {
+    const selectedVM = state.vm_arr.find((vm) => vm.id === id);
+    if (selectedVM) {
+      const childState = {
+        data: {
+          ...selectedVM,
+          add_primary_tag: selectedVM.add_primary_tag || [],
+          add_secondary_tag: selectedVM.add_secondary_tag || [],
+        },
+        error: {},
+        showLeftPanel: true,
+        loading_data: false,
+        available_monitoring_resource_list: [],
+        credential_list: [],
+        validations: {},
+      };
+
+      setEditedItem(id);
+      setState((prev) => ({ ...prev, singleVmChildState: childState }));
+      setOpen({ open: true, clear_form_flag: false });
+    }
+  };
+
+  const fetchPrevInfo = (e, url) => {
+    if (state.previous && state.curr_page > 1) {
+      fetchVMsWithFilters(id, state.curr_page - 1);
+    }
+  };
+
+  const fetchNextInfo = (e, url) => {
+    if (state.next && state.curr_page < state.total_page) {
+      fetchVMsWithFilters(id, state.curr_page + 1);
+    }
+  };
+
+  // Filter update handler
+  const onUpdateHandle = (uniqueId, updatedList) => {
+    try {
+      const safeUpdatedList = safeArray(updatedList);
+      let updatedKey = "";
+
+      if (uniqueId === "more-button-adv-0") {
+        addFiltersToUrl("adv_search", safeUpdatedList);
+        if (safeUpdatedList.length === 0) {
+          resetAdvFilter();
+        } else {
+          setState((prevState) => ({
+            ...prevState,
+            moreAdvFilterList: safeUpdatedList,
+          }));
+        }
+      } else {
+        // Map unique IDs to filter keys
+        const idToKeyMap = {
+          vm_name_adv_1: "vm_name",
+          primary_tag_adv_2: "primary_tag",
+          secondary_tag_adv_3: "secondary_tag",
+          ip_address_adv_4: "ip_address",
+          status_adv_5: "status",
+        };
+
+        updatedKey = idToKeyMap[uniqueId];
+
+        if (!updatedKey) {
+          console.warn(`Unknown filter ID: ${uniqueId}`);
+          return;
+        }
+
+        setState((prevState) => ({
+          ...prevState,
+          advFilters: {
+            ...prevState.advFilters,
+            [updatedKey]: safeUpdatedList,
+          },
+        }));
+
+        addFiltersToUrl(updatedKey, safeUpdatedList);
+        const advFilters = {
+          ...state.advFilters,
+          [updatedKey]: safeUpdatedList,
+        };
+
+        if (id) {
+          fetchVMsWithFilters(id, 1, advFilters);
+        }
+      }
+    } catch (error) {
+      console.error("Error updating filters:", error);
+      showSnackbar("Error updating filters", "error");
+    }
+  };
+
+  const resetAdvFilter = () => {
+    const resetFilterData = {
+      vm_name: [],
+      primary_tag: [],
+      secondary_tag: [],
+      ip_address: [],
+      status: [],
+    };
+
+    fetchVMsWithFilters(id, 1, resetFilterData, defaultFilters);
+    addFiltersToUrl("all_delete");
+    setState((prevState) => ({
+      ...prevState,
+      moreAdvFilterList: defaultFilters,
+      advFilters: resetFilterData,
+      resetCount: prevState.resetCount + 1,
+    }));
+  };
+
+  // Add filters to URL
+  const addFiltersToUrl = (filterName, filterValue) => {
+    try {
+      let urlSearchParams = new URLSearchParams(location.search);
+      const allFilters = [
+        "vm_name",
+        "primary_tag",
+        "secondary_tag",
+        "ip_address",
+        "status",
+      ];
+
+      if (filterName === "all_delete") {
+        urlSearchParams = new URLSearchParams();
+      } else {
+        const safeFilterValue = safeArray(filterValue);
+
+        if (filterName === "adv_search") {
+          allFilters.forEach((value) => {
+            if (!safeFilterValue.includes(value)) {
+              urlSearchParams.delete(value);
+            }
+          });
+        }
+
+        if (safeFilterValue.length === 0) {
+          urlSearchParams.delete(filterName);
+        } else {
+          const valueString = safeFilterValue.join(",");
+          if (urlSearchParams.has(filterName)) {
+            urlSearchParams.set(filterName, valueString);
+          } else {
+            urlSearchParams.append(filterName, valueString);
+          }
+        }
+      }
+
+      history({
+        pathname: location.pathname,
+        search: urlSearchParams.toString(),
+      });
+    } catch (error) {
+      console.error("Error updating URL filters:", error);
+    }
+  };
+
+  // Filter data parsing functions
+  function filterDataParseForVMName(data) {
+    try {
+      return safeArray(data)
+        .map((item) => ({
+          label: item?.vm_name || "Unknown",
+          value: item?.vm_name || "",
+          ...item,
+        }))
+        .filter((item) => item.value);
+    } catch (error) {
+      console.error("Error parsing VM names:", error);
+      return [];
+    }
+  }
+
+  function filterDataParseForTags(data, tagType) {
+    try {
+      const tags_list = [];
+      safeArray(data).forEach((item) => {
+        const tagsArray =
+          tagType === "primary"
+            ? safeArray(item?.add_primary_tag)
+            : safeArray(item?.add_secondary_tag);
+
+        tagsArray.forEach((tag) => {
+          if (tag && !tags_list.includes(tag)) {
+            tags_list.push(tag);
+          }
+        });
+      });
+
+      return tags_list.map((item) => ({
+        label: item,
+        value: item,
+      }));
+    } catch (error) {
+      console.error("Error parsing tags:", error);
+      return [];
+    }
+  }
+
+  function filterDataParseForIPAddress(data) {
+    try {
+      return safeArray(data)
+        .map((item) => ({
+          label: item?.ip_address || "Unknown",
+          value: item?.ip_address || "",
+          ...item,
+        }))
+        .filter((item) => item.value);
+    } catch (error) {
+      console.error("Error parsing IP addresses:", error);
+      return [];
+    }
+  }
+
+  // More filter options
+  const moreFilterData = [
+    { label: "VM Name", value: "vm_name" },
+    { label: "Primary Tag", value: "primary_tag" },
+    { label: "Secondary Tag", value: "secondary_tag" },
+    { label: "IP Address", value: "ip_address" },
+    { label: "Status", value: "status" },
+  ];
+
+  // Advanced filter configuration
+  const advanceFilterJson = {
+    vm_name: {
+      staticList: false,
+      labelName: "VM Name",
+      uniqueId: "vm_name_adv_1",
+      searchVariable: "vm_name",
+      placeholder_name: "edit_id",
+      placeholder_value: id,
+      getFetchUrl: properties.api.edit_vm_group + "?vm_sets=true",
+      searchUrl: properties.api.edit_vm_group + "?vm_sets=true",
+      filterDataPraseFunction: filterDataParseForVMName,
+    },
+    primary_tag: {
+      staticList: false,
+      labelName: "Primary Tag",
+      uniqueId: "primary_tag_adv_2",
+      searchVariable: "add_primary_tag",
+      placeholder_name: "edit_id",
+      placeholder_value: id,
+      getFetchUrl: properties.api.edit_vm_group + "?vm_sets=true",
+      searchUrl: properties.api.edit_vm_group + "?vm_sets=true",
+      filterDataPraseFunction: (data) =>
+        filterDataParseForTags(data, "primary"),
+      showMoreNotRequired: true,
+    },
+    secondary_tag: {
+      staticList: false,
+      labelName: "Secondary Tag",
+      uniqueId: "secondary_tag_adv_3",
+      searchVariable: "add_secondary_tag",
+      placeholder_name: "edit_id",
+      placeholder_value: id,
+      getFetchUrl: properties.api.edit_vm_group + "?vm_sets=true",
+      searchUrl: properties.api.edit_vm_group + "?vm_sets=true",
+      filterDataPraseFunction: (data) =>
+        filterDataParseForTags(data, "secondary"),
+      showMoreNotRequired: true,
+    },
+    ip_address: {
+      staticList: false,
+      labelName: "IP Address",
+      uniqueId: "ip_address_adv_4",
+      searchVariable: "ip_address",
+      placeholder_name: "edit_id",
+      placeholder_value: id,
+      getFetchUrl: properties.api.edit_vm_group + "?vm_sets=true",
+      searchUrl: properties.api.edit_vm_group + "?vm_sets=true",
+      filterDataPraseFunction: filterDataParseForIPAddress,
+    },
+    status: {
+      staticList: [
+        { label: "Online", value: "ONLINE" },
+        { label: "Offline", value: "OFFLINE" },
+      ],
+      uniqueId: "status_adv_5",
+      labelName: "Status",
+      searchVariable: null,
+      getFetchUrl: null,
+      filterDataPraseFunction: null,
+    },
+  };
+
+  const VARIANTS = [
+    "info",
+    "highlight",
+    "error",
+    "light",
+    "dark",
+    "success",
+    "warning",
+  ];
+
+  return (
+    <div className={classes.root}>
+      <Button
+        variant="back"
+        startIcon="ri-arrow-left-s-line"
+        onClick={() => safeNavigateBack(navigate, `/vm-groups/list`)}
+      >
+        Back
+      </Button>
+      <>
+        <div className={classes.vmHeader}>
+          <div style={{ flex: 1, gap: "var(--space-6)" }}>
+            <PageHeader
+              heading={`Virtual Machine Group: ${state.data.virtual_group_name || "NA"
+                }`}
+              subHeading={
+                <div className={classes.vmHeaderEnvTitle}>
+                  Environment Restriction:
+                  {state.selectedMasterEnv.length > 0 ? (
+                    state.selectedMasterEnv.map((env, index) => {
+                      const variant = VARIANTS[index % VARIANTS.length];
+                      return <EnvChip key={index} er={env.tabName} />;
+                    })
+                  ) : (
+                    <span style={{ marginLeft: "var(--space-8)", color: "var(--color-content-tertiary)" }}>
+                      None
+                    </span>
+                  )}
+                </div>
+              }
+              primaryButton={{
+                actionType: "onClick",
+                icon: <span className="ri-upload-2-line">&nbsp;</span>,
+                text: "UPLOAD CSV FILE",
+                buttonClass: "btn btn-pagintaion ",
+                action: () => setOpenCSVDialog(true),
+              }}
+              secondaryButton={{
+                actionType: "onClick",
+                icon: <span className="ri-add-line">&nbsp;</span>,
+                text: "ADD MORE",
+                buttonClass: "btn btn-pagintaion",
+                action: () => handleClickOpen(true),
+              }}
+              icon="ri-cpu-line font-24"
+            />
+          </div>
+        </div>
+
+        <div>
+          <div className={classes.header}>
+            <div className={classes.titleWrapper}>
+              <span className={classes.title}>Virtual Machines</span>
+              <span className="ri-information-line font-16" />
+            </div>
+          </div>
+          {(state.is_filters_applied || state.count != 0) && (
+            <div className={classes.filterContainer}>
+              <div className={classes.filterLeft}>
+                {state.moreAdvFilterList?.map((filterName) => {
+                  return (
+                    <div
+                      key={filterName}
+                      className="ad-more-search"
+                      style={{ whiteSpace: "nowrap" }}
+                    >
+                      <AdvanceSearchFilterCombo
+                        key={`${filterName}-${id}-${state.resetCount}`}
+                        reset={state.resetCount}
+                        selectedCheckBoxes={state.advFilters[filterName]}
+                        searchVariable={
+                          advanceFilterJson[filterName]["searchVariable"]
+                        }
+                        staticList={advanceFilterJson[filterName]["staticList"]}
+                        uniqueId={advanceFilterJson[filterName]["uniqueId"]}
+                        labelName={advanceFilterJson[filterName]["labelName"]}
+                        searchUrl={advanceFilterJson[filterName]["searchUrl"]}
+                        onUpdate={onUpdateHandle}
+                        getFetchUrl={
+                          advanceFilterJson[filterName]["getFetchUrl"]
+                        }
+                        placeholder_name={
+                          advanceFilterJson[filterName]["placeholder_name"]
+                        }
+                        placeholder_value={
+                          advanceFilterJson[filterName]["placeholder_value"]
+                        }
+                        filterDataPraseFunction={
+                          advanceFilterJson[filterName][
+                          "filterDataPraseFunction"
+                          ]
+                        }
+                        showMoreNotRequired={
+                          advanceFilterJson[filterName]["showMoreNotRequired"]
+                        }
+                        apiHitOnClick={true}
+                        autoClosedAfterSelection={false}
+                      />
+                    </div>
+                  );
+                })}
+                <div className="ad-more-search">
+                  <AdvanceSearchFilterCombo
+                    key={`more-adv-${id}-${state.resetCount}`}
+                    selectedCheckBoxes={state.moreAdvFilterList}
+                    reset={state.resetCount}
+                    staticList={moreFilterData}
+                    autoClosedAfterSelection={true}
+                    onUpdate={onUpdateHandle}
+                    // variant="more-button"
+                    variant="more-button"
+                    uniqueId="more-button-adv-0"
+                  />
+                </div>
+
+                <div
+                  onClick={resetAdvFilter}
+                  className={classes.resetButton}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={() => { }}
+                >
+                  <span
+                    style={{ color: "var(--color-content-secondary)" }}
+                    className="font-14 cursor-pointer"
+                  >
+                    Reset
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {state.loading_vms ? (
+          <div
+            style={{ width: "100%", marginTop: "var(--space-24)" }}
+            className="loading-area"
+          >
+            <div className="table-view">
+              <div className="table-view-row-header">VM Name</div>
+              <div className="table-view-row-header">Primary Tags</div>
+              <div className="table-view-row-header">Secondary Tags</div>
+              <div className="table-view-row-header">IP Address</div>
+              <div className="table-view-row-header">Status</div>
+              <div className="table-view-row-header"></div>
+
+              {Array.from({ length: 5 }).map((_, index) => (
+                <SkeletonRow key={index} />
+              ))}
+            </div>
+          </div>
+        ) : state.vm_arr.length === 0 ? (
+          <div className="table-view">
+            <div className="table-view-row-header">VM Name</div>
+            <div className="table-view-row-header">Primary Tags</div>
+            <div className="table-view-row-header">Secondary Tags</div>
+            <div className="table-view-row-header">IP Address</div>
+            <div className="table-view-row-header">Status</div>
+            <div className="table-view-row-header"></div>
+
+            <BlankPage
+              additionalClass="mb-16"
+              text={
+                state.is_filters_applied
+                  ? "No Virtual Machines found"
+                  : "No Virtual Machine added"
+              }
+              subHeading={
+                state.is_filters_applied
+                  ? "Try adjusting your filters"
+                  : "Add VM through add more or Upload CSV Above"
+              }
+              pageIcon={
+                <span className="ri-cpu-line font-28 color-key-gray"></span>
+              }
+              variant="inside-table"
+              additionalStyles={{
+                padding: "var(--space-55) 0",
+                textAlign: "center",
+                height: "auto",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gridColumn: "1 / -1",
+              }}
+              backgroundColor="var(--color-grey-100)"
+            />
+          </div>
+        ) : (
+          <div style={{ width: "100%", marginTop: "var(--space-24)" }}>
+            <div className="table-view">
+              <div className="table-view-row-header">VM Name</div>
+              <div className="table-view-row-header">Primary Tags</div>
+              <div className="table-view-row-header">Secondary Tags</div>
+              <div className="table-view-row-header">IP Address</div>
+              <div className="table-view-row-header">Status</div>
+              <div className="table-view-row-header"></div>
+
+              {state.vm_arr.map((item, index) => {
+                return (
+                  <React.Fragment key={index}>
+                    <div className="table-view-row " style={{ gap: "var(--space-12)" }}>
+                      <div
+                        style={{
+                          width: "var(--space-30)",
+                          height: "var(--space-30)",
+                          borderRadius: "5.63px",
+                          backgroundColor: "var(--color-pastel-blue-2)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <span
+                          className="ri-computer-line font-18"
+                          style={{ color: "var(--color-tertiary-500)" }}
+                        />
+                      </div>
+
+                      {item.vm_name && item.vm_name.length > 15
+                        ? `${item.vm_name.slice(0, 10)}...`
+                        : item.vm_name}
+                    </div>
+                    {/* Primary Tags */}
+                    <div className="table-view-row">
+                      {Array.isArray(item.add_primary_tag) &&
+                        item.add_primary_tag.length > 0 ? (
+                        <div
+                          className="add_primary_tag"
+                          style={{ display: "flex", gap: "var(--space-4)" }}
+                        >
+                          {item.add_primary_tag
+                            .slice(0, 2)
+                            .map((tag, tagIndex) => (
+                              <NewChip
+                                key={tagIndex}
+                                label={tag}
+                                shape="pill"
+                                variant="info"
+                                size="md"
+                              />
+                            ))}
+
+                          {item.add_primary_tag.length > 2 && (
+                            <Tooltip
+                              title={
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    flexWrap: "wrap",
+                                    justifyContent: "center",
+                                    alignItems: "center",
+                                    gap: "var(--space-6)",
+                                    padding: "var(--space-4)",
+                                    maxWidth: "var(--space-300)",
+                                  }}
+                                >
+                                  {item.add_primary_tag
+                                    .slice(2)
+                                    .map((tag, tagIndex) => (
+                                      <span
+                                        key={tagIndex}
+                                        style={{
+                                          fontSize: "var(--font-12)",
+                                          backgroundColor: "var(--color-pastel-blue-2)",
+                                          color: "var(--color-primary-400)",
+                                          padding: "var(--space-4) var(--space-8)",
+                                          borderRadius: "var(--radius-pill)",
+                                          border: "var(--space-1) solid var(--color-tertiary-200)",
+                                          whiteSpace: "nowrap",
+                                          overflow: "hidden",
+                                          textOverflow: "ellipsis",
+                                          maxWidth: "var(--space-100)",
+                                          textAlign: "center",
+                                        }}
+                                      >
+                                        {tag}
+                                      </span>
+                                    ))}
+                                </div>
+                              }
+                              arrow
+                              placement="top"
+                              componentsProps={{
+                                tooltip: {
+                                  sx: {
+                                    bgcolor: "var(--color-white) !important",
+                                    backgroundColor: "var(--color-white) !important",
+                                    // border: 'var(--space-1) solid var(--color-badge-grey-bg) !important',
+                                    boxShadow: "var(--space-0) var(--space-4) var(--space-12) rgba(0, 0, 0, 0.1) !important",
+                                    borderRadius: "var(--radius-8) !important",
+                                    maxWidth: "var(--space-400) !important",
+                                    padding: "var(--space-4) !important",
+                                  },
+                                },
+                                arrow: {
+                                  sx: {
+                                    color: "var(--color-white) !important",
+                                    "&::before": {
+                                      // border: 'var(--space-1) solid var(--color-badge-grey-bg) !important',
+                                      backgroundColor: "var(--color-white) !important",
+                                      boxSizing: "border-box",
+                                    },
+                                  },
+                                },
+                                popper: {
+                                  sx: {
+                                    "& .MuiTooltip-tooltip": {
+                                      bgcolor: "var(--color-white) !important",
+                                      backgroundColor: "var(--color-white) !important",
+                                      // border: 'var(--space-1) solid var(--color-badge-grey-bg) !important',
+                                      boxShadow: "var(--space-0) var(--space-4) var(--space-12) rgba(0, 0, 0, 0.1) !important",
+                                    },
+                                    "& .MuiTooltip-arrow": {
+                                      color: "var(--color-white) !important",
+                                      "&::before": {
+                                        // border: 'var(--space-1) solid var(--color-badge-grey-bg) !important',
+                                        backgroundColor: "var(--color-white) !important",
+                                      },
+                                    },
+                                  },
+                                },
+                              }}
+                            >
+                              <span style={{ cursor: "pointer" }}>
+                                <NewChip
+                                  label={`+${item.add_primary_tag.length - 2}`}
+                                  shape="pill"
+                                  size="md"
+                                />
+                              </span>
+                            </Tooltip>
+                          )}
+                        </div>
+                      ) : (
+                        <span
+                          style={{
+                            backgroundColor: "var(--color-grey-100)",
+                            border: "var(--space-1) solid var(--color-badge-grey-bg)",
+                            fontSize: "var(--font-10)",
+                            color: "var(--color-grey-600)",
+                            padding: "var(--space-3) var(--space-5)",
+                            borderRadius: "var(--radius-4)",
+                            fontWeight: 'var(--font-weight-600)',
+                          }}
+                        >
+                          N/A
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="table-view-row">
+                      {Array.isArray(item.add_secondary_tag) &&
+                        item.add_secondary_tag.length > 0 ? (
+                        <div
+                          className="add_primary_tag"
+                          style={{ display: "flex", gap: "var(--space-4)" }}
+                        >
+                          {item.add_secondary_tag
+                            .slice(0, 2)
+                            .map((tag, index) => (
+                              <NewChip
+                                key={index}
+                                label={tag}
+                                shape="pill"
+                                variant="info"
+                                size="md"
+                              />
+                            ))}
+
+                          {item.add_secondary_tag.length > 2 && (
+                            <Tooltip
+                              title={
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    flexWrap: "wrap",
+                                    justifyContent: "center",
+                                    alignItems: "center",
+                                    gap: "var(--space-6)",
+                                    padding: "var(--space-4)",
+                                    maxWidth: "var(--space-300)",
+                                  }}
+                                >
+                                  {item.add_secondary_tag
+                                    .slice(2)
+                                    .map((tag, tagIndex) => (
+                                      <span
+                                        key={tagIndex}
+                                        style={{
+                                          fontSize: "var(--font-12)",
+                                          backgroundColor: "var(--color-pastel-blue-2)",
+                                          color: "var(--color-primary-400)",
+                                          padding: "var(--space-4) var(--space-8)",
+                                          borderRadius: "var(--radius-pill)",
+                                          border: "var(--space-1) solid var(--color-tertiary-200)",
+                                          whiteSpace: "nowrap",
+                                          overflow: "hidden",
+                                          textOverflow: "ellipsis",
+                                          maxWidth: "var(--space-100)",
+                                          textAlign: "center",
+                                        }}
+                                      >
+                                        {tag}
+                                      </span>
+                                    ))}
+                                </div>
+                              }
+                              arrow
+                              placement="top"
+                              componentsProps={{
+                                tooltip: {
+                                  sx: {
+                                    bgcolor: "var(--color-white) !important",
+                                    backgroundColor: "var(--color-white) !important",
+                                    // border: 'var(--space-1) solid var(--color-badge-grey-bg) !important',
+                                    boxShadow: "var(--space-0) var(--space-4) var(--space-12) rgba(0, 0, 0, 0.1) !important",
+                                    borderRadius: "var(--radius-8) !important",
+                                    maxWidth: "var(--space-400) !important",
+                                    padding: "var(--space-4) !important",
+                                  },
+                                },
+                                arrow: {
+                                  sx: {
+                                    color: "var(--color-white) !important",
+                                    "&::before": {
+                                      // border: 'var(--space-1) solid var(--color-badge-grey-bg) !important',
+                                      backgroundColor: "var(--color-white) !important",
+                                      boxSizing: "border-box",
+                                    },
+                                  },
+                                },
+                                popper: {
+                                  sx: {
+                                    "& .MuiTooltip-tooltip": {
+                                      bgcolor: "var(--color-white) !important",
+                                      backgroundColor: "var(--color-white) !important",
+                                      // border: 'var(--space-1) solid var(--color-badge-grey-bg) !important',
+                                      boxShadow: "var(--space-0) var(--space-4) var(--space-12) rgba(0, 0, 0, 0.1) !important",
+                                    },
+                                    "& .MuiTooltip-arrow": {
+                                      color: "var(--color-white) !important",
+                                      "&::before": {
+                                        // border: 'var(--space-1) solid var(--color-badge-grey-bg) !important',
+                                        backgroundColor: "var(--color-white) !important",
+                                      },
+                                    },
+                                  },
+                                },
+                              }}
+                            >
+                              <span style={{ cursor: "pointer" }}>
+                                <NewChip
+                                  label={`+${item.add_secondary_tag.length - 2}`}
+                                  shape="pill"
+                                  size="md"
+                                />
+                              </span>
+                            </Tooltip>
+                          )}
+                        </div>
+                      ) : (
+                        <span
+                          style={{
+                            backgroundColor: "var(--color-grey-100)",
+                            border: "var(--space-1) solid var(--color-badge-grey-bg)",
+                            fontSize: "var(--font-10)",
+                            color: "var(--color-grey-600)",
+                            padding: "var(--space-3) var(--space-5)",
+                            borderRadius: "var(--radius-4)",
+                            fontWeight: 'var(--font-weight-600)',
+                          }}
+                        >
+                          N/A
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="table-view-row">
+                      <span className="" style={{ color: "var(--color-content-tertiary)" }}>
+                        {item.ip_address || "N/A"}
+                      </span>
+                    </div>
+                    <div className="table-view-row">
+                      <span className="">
+                        {item.status && item.status === "ONLINE" ? (
+                          <NewChip
+                            label={item.status}
+                            shape="standard"
+                            variant="success"
+                          />
+                        ) : (
+                          <NewChip
+                            label={item.status || "OFFLINE"}
+                            shape="standard"
+                            variant="warning"
+                          />
+                        )}
+                      </span>
+                    </div>
+                    <div
+                      className="table-view-row"
+                      style={{
+                        display: "flex",
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "end",
+                        gap: "var(--space-6)",
+                        padding: "var(--space-5) var(--space-7)",
+                      }}
+                    >
+                      <Button
+                        variant="outline"
+                        className="btn btn-pagintaion font-weight-600"
+                        style={{
+                          padding: "var(--space-9)",
+                        }}
+                        isLoading={item.loading}
+                        onClick={() => {
+                          testConnectionApiHit(item, index);
+                        }}
+                      >
+                        Test
+                      </Button>
+
+                      <button
+                        className={classes.iconButton}
+                        onClick={() => handleHealthDialogOpen(item.id)}
+                      >
+                        <span className="ri-heart-pulse-line font-22" />
+                      </button>
+
+                      <div
+                        style={{
+                          fontSize: "var(--font-11)",
+                        }}
+                      >
+                        <PopoverDropdown
+                          name={item.vm_name}
+                          id={item.id}
+                          handleOpenDialog={setDataforEdit}
+                          handleRefresh={() => {
+                            fetchVMsWithFilters(id, 1);
+                          }}
+                          handleOpenFetchKeyDialog={() =>
+                            handleOpenFetchKeyDialog(
+                              item.user_name,   // ← was item.vm_name
+                              item.ip_address,
+                            )
+                          }
+                          classes={classes}
+                        />
+                      </div>
+                    </div>
+                  </React.Fragment>
+                );
+              })}
+            </div>
+
+            <div
+              style={{
+                position: "relative",
+                bottom: "0",
+                marginBottom: "var(--space-23)",
+                width: "100%",
+              }}
+            >
+              {state.vm_arr && state.vm_arr.length > 0 && (
+                <div style={{ marginTop: "var(--space-24)" }}>
+                  <PaginationTwo
+                    current_page_count={state.curr_page}
+                    total_count={state.total_page}
+                    next={state.next}
+                    count={state.count}
+                    previous={state.previous}
+                    on_previous_click={() => {
+                      fetchPrevInfo(null, state.previous);
+                    }}
+                    on_next_click={() => {
+                      fetchNextInfo(null, state.next);
+                    }}
+                    on_pageNumber_click={(pageNumber) => {
+                      fetchPageInfo(pageNumber);
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        <AddSingleVMDialog
+          open={open.open}
+          handleClose={handleClickClose}
+          sendDataToParent={getDataAndSetToState}
+          edit_id={editedItem}
+          user_name={fetchKeyDialogState.user_name}   // ← was vm_name
+          ip_address={fetchKeyDialogState.ip_address}
+          prev_state={state.singleVmChildState}
+          clear_form_flag={open.clear_form_flag}
+          vmGroupDetails={state.parent_state}
+          handleCloseDialogAndFetchVMs={handleCloseDialogAndFetchVMs}
+          onClickOpenSSHkeyDialog={handleClickSSHKeyDialog}
+          clearFormFlag={open.clear_form_flag}
+        />
+
+        <AddVirtualMachineCSV
+          open={openCSVDialog}
+          vmGroupId={id}
+          handleClose={() => setOpenCSVDialog(false)}
+          handleCloseDialogAndFetchVMs={() => {
+            setOpenCSVDialog(false);
+            fetchVMsWithFilters(id, 1);
+          }}
+        />
+
+
+        <Box sx={{
+          border: 'none',
+          '& > div > div': {
+            border: 'none !important',
+            boxShadow: 'none !important'
+          },
+
+          '& [class^="makeStyles-cardFooter-"]': {
+            border: 'none !important',
+            backgroundColor: 'transparent !important',
+            padding: 'var(--space-16) var(--space-20) !important',
+            display: 'flex !important',
+            justifyContent: 'space-between !important',
+            alignItems: 'center !important',
+            position: 'relative !important',
+
+            '& .footer-left': {
+              display: 'flex !important',
+              alignItems: 'center !important',
+              gap: 'var(--space-12) !important'
+            },
+
+            '& .footer-right': {
+              display: 'flex !important',
+              gap: 'var(--space-12) !important',
+              alignItems: 'center !important'
+            },
+          },
+        }}
+        >
+          {taskId && (
+            <ShowActivityStatusFramework
+              open={taskId ? true : false}
+              task_id={taskId}
+              handleClose={handleCloseStatusActivity}
+            />
+          )}
+        </Box>
+
+        <VMSetHealthDialog
+          open={openHealthDialog}
+          vmSetId={selectedVMForHealth}
+          onClose={handleHealthDialogClose}
+        />
+
+        {fetchKeyDialogState.open && (
+          <FetchPublicKeyDialog
+            user_name={fetchKeyDialogState.user_name}   // ← was vm_name
+            ip_address={fetchKeyDialogState.ip_address}
+            open={fetchKeyDialogState.open}
+            onClose={handleCloseFetchKeyDialog}
+          />
+        )}
+      </>
+    </div>
+  );
+}
