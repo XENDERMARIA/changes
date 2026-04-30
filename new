@@ -1,0 +1,2586 @@
+import React, { useState, useEffect } from 'react';
+import PropTypes from 'prop-types';
+import { makeStyles } from '@mui/styles';
+import AccessLevel, { getAccessLevelDefaultState, getCustomIngressDefaultState, getEnabledComponentServiceNameDefaultState } from './AccessLevel';
+import VersioningDetails, { getVersioningDetailsDefaultState } from './VersioningDetails';
+import SquareAvatar from '../../../../components/genericComponents/AvatarSquare';
+import ResourceQuota, { getResourceQuotaDefaultState, getSpecifyLimitQuotaDefaultState, getAutoScalingDefaultState, getSpecifyGPUDefaultState } from './ResourceQuota';
+import ConfigSecret, { getConfigMapDefaultState, getConfigSecretDefaultState, getSecretComponentDefaultState, getConfigMapBodyDefaultState, getSecretBodyDefaultState, getEnabledComponentEntryPointDefaultState, getPvcComponentDefaultState, getPVSsBodyDefaultState, getConfigMapSubPathDefaultState, getConfigMapKeyDefaultState, getConfigMapKeyNSubPathBody, getSecretSubPathDefaultState, getSecretKeyDefaultState, getSecretKeyNSubPathBody } from './ConfigSecret';
+import { StepWizard } from '../../../../components/Step Wizard/StepWizard';
+import EnvVar, {
+    getEnvVarDefaultState, getEnabledComponentSecretDefaultState, getEnabledComponentConfigMapDefaultState, getEnabledComponentRawInputDefaultState,
+    getSecretInputBodyDefaultState, getConfigInputBodyDefaultState, getRawInputBodyDefaultState,
+    getEnabledComponentFieldRefDefaultState,
+    getFieldsRefInputBodyDefaultState
+} from './EnvVar';
+import LivenessAndReadiness, { getLivenessDefaultState, getLivenessReadinessDefaultState, getReadinessDefaultState } from './LivenessReadiness';
+import ServiceHooks, { hookDataParserForReorderComponent, getDefaultServiceHookState, getAddPreHookState, hooksEditDataParser, getAddPostHookState, hostMappingDataParser } from '../ci_flow/ServiceHooks';
+import InvokeApi, { PostData } from '../../../../util/apiInvoker';
+import GenerateURL from '../../../../util/APIUrlProvider';
+import properties from '../../../../properties/properties';
+import { Loading } from '../../../utils/Loading';
+import { Navigate, useParams, Link, useNavigate } from 'react-router-dom';
+import { getMultiRowDefaultState } from '../../../../components/genericComponents/MultiRow';
+import Tooltip from '@mui/material/Tooltip';
+import NodeAndServiceAffinity, { getAffinityDefaultState, getNodeAffinityInputBodyDefaultState, getServiceAffinityDefaultState, getNodeAffinityPrefferedDefaultState, getServiceAntiAffinityDefaultState, getNodeAffinityRequiredDefaultState } from './NodeAndServiceAffinity';
+import LabelsAnnotations, { getDefaultLabelsAnnotationsState, keyValueParser } from './LabelsAnnoations';
+import { safeNavigateBack, showErrorHandlerUpdated } from '../../../../util/util';
+import { getCanaryTemplateDropDownDefaultState } from '../../../service/detail/components/CanaryTemplate';
+import { multiplePortsDefaultState } from './components/MultiPort'
+import { useLocation } from 'react-router-dom';
+import TolerationsAndPriority, { getTolerationsAndPriorityDefaultState, getTolerationsDefaultState } from './TolerationsAndPriority';
+import { prioritiesDefaultState } from './Priorities';
+import { getEmptyDirComponentDefaultState, getEmptyDirFormDefaultState } from './EnabledComponentEmptyDir';
+import { getHostPathFormDefaultState, getHostpathComponentDefaultState } from './EnabledComponentHostpath';
+import AlertStrip from '../../../../components/AlertStrips';
+import MountConfig, { getMountDetailsDefaultState } from './MountConfig';
+
+import queryString from 'query-string';
+import { useCustomSnackbar } from '../../../../contexts/SnackbarContext';
+import SecurityContextDetails, { getContainerSecurityBodyDefaultState, getContainerSecurityDefaultState, getDefaultPodSecurityState, getPodSecurityBodyDefaultState, getSecurityContextDefaultState } from './SecurityContextDetails';
+import AdditionalManifest, { getAdditionalManifestDefaultState } from './AdditionalManifest';
+import { VALIDATION_TYPE_REQUIRED } from '../../../../util/Validator';
+import Button from '../../../../components/genericComponents/Button';
+const CdInfo = props => {
+    const location = useLocation();
+    var parsed = queryString.parse(location.search);
+    var extraProps = location ? location.state ? { ...location.state } : { service_name: "", project_env_name: "", environment_master_name: "" } : { service_name: "", project_env_name: "", environment_master_name: "" };
+    const classes = useStyles();
+    const navigate = useNavigate();
+    const [canRedirect, setRedirect] = useState(false);
+    const clone_env_id = location ? location.state ? location.state.clone_env_id : null : null;
+    const clone_deploy_id = location ? location.state ? location.state.clone_deploy_id : null : null;
+    const available_deployments = location ? location.state ? location.state.available_deployments : null : null;
+    const { application_id, component_id, component_env_id, cd_id } = useParams();
+    console.log(cd_id, clone_deploy_id, location.state, "lfsajdfjhsa")
+    const { showSnackbar } = useCustomSnackbar();
+    const [state, setState] = useState({
+        selectedTabOrder: parsed.selectedTabOrder ? Number(parsed.selectedTabOrder) : location ? location.query ? location.query.selectedTabOrder : 1 : 1,
+        available_settings: [],
+        cd_settings: [],
+        data_loading: true,
+        error_in_save_cd: null,
+        selected_cd_id: location && location.query ? location.query.selected_cd_id : null
+    });
+
+    function goBack() {
+        const path = `/application/${application_id}/service/${component_id}/detail?env_id=${component_env_id}`;
+        navigate(path);
+    }
+    console.log(parsed, "fdsafsafdsa")
+    console.log(props?.location?.query, "rtyuihj ===============>")
+    var serviceName = "";
+    const panel_list = [
+        {
+            order: 1,
+            mainText: 'Access Level',
+            body: AccessLevel
+        },
+        {
+            order: 2,
+            mainText: 'Request Quota',
+            body: ResourceQuota
+        },
+        {
+            order: 3,
+            mainText: 'Configuration & Secrets',
+            body: ConfigSecret
+        },
+        {
+            order: 4,
+            mainText: 'Mount Details',
+            body: MountConfig
+        },
+        {
+            order: 5,
+            mainText: 'Env Variables',
+            body: EnvVar
+        },
+        {
+            order: 6,
+            mainText: 'Node And Service Affinity',
+            body: NodeAndServiceAffinity
+        },
+        {
+            order: 7,
+            mainText: 'Security Context Details',
+            body: SecurityContextDetails
+        },
+        {
+            order: 8,
+            mainText: 'Tolerations And Priorities',
+            body: TolerationsAndPriority
+        },
+        {
+            order: 9,
+            mainText: 'Liveness/Readiness',
+            body: LivenessAndReadiness
+        },
+        {
+            order: 10,
+            mainText: 'Labels/Annotations',
+            body: LabelsAnnotations
+        },
+        {
+            order: 11,
+            mainText: 'Additional Manifest',
+            body: AdditionalManifest
+        },
+        {
+            order: 12,
+            mainText: 'Hooks',
+            body: ServiceHooks
+        },
+        {
+            order: 13,
+            mainText: 'Versioning Details',
+            body: VersioningDetails
+        },
+    ]
+    const panel_list_2 = [
+        {
+            order: 1,
+            mainText: 'Access Level',
+            body: AccessLevel
+        },
+        {
+            order: 2,
+            mainText: 'Request Quota',
+            body: ResourceQuota
+        },
+        {
+            order: 3,
+            mainText: 'Configuration & Secrets',
+            body: ConfigSecret
+        },
+        {
+            order: 4,
+            mainText: 'Mount Details',
+            body: MountConfig
+        },
+
+        {
+            order: 5,
+            mainText: 'Env Variables',
+            body: EnvVar
+        },
+        {
+            order: 6,
+            mainText: 'Node And Service Affinity',
+            body: NodeAndServiceAffinity
+        },
+        {
+            order: 7,
+            mainText: 'Security Context Details',
+            body: SecurityContextDetails
+        },
+        {
+            order: 8,
+            mainText: 'Tolerations And Priorities',
+            body: TolerationsAndPriority
+        },
+        {
+            order: 9,
+            mainText: 'Liveness/Readiness',
+            body: LivenessAndReadiness
+        },
+        {
+            order: 10,
+            mainText: 'Labels/Annotations',
+            body: LabelsAnnotations
+        },
+        {
+            order: 11,
+            mainText: 'Additional Manifest',
+            body: AdditionalManifest
+        },
+        {
+            order: 12,
+            mainText: 'Hooks',
+            body: ServiceHooks
+        }
+    ]
+    function onSubmit(panel_object) {
+        var post_data_final = {};
+        // post_data_final.status = panel_object.status
+        // post_data_final.id = panel_object.id
+        console.log(panel_object, "panel_obj ===========>")
+        Object.keys(panel_object).forEach(panel => (
+            post_data_final = {
+                ...post_data_final, ...panelPostDataParser(
+                    panel,
+                    panel_object[panel],
+                    post_data_final.env_cd_configmap ? post_data_final.env_cd_configmap : null,
+                    post_data_final.env_cd_secret ? post_data_final.env_cd_secret : null,
+                    post_data_final.env_cd_pvc_variable ? post_data_final.env_cd_pvc_variable : null,
+                    post_data_final.env_cd_empty_dir ? post_data_final.env_cd_empty_dir : null,
+                    post_data_final.env_cd_host_path ? post_data_final.env_cd_host_path : null,
+                    post_data_final.env_cd_configmap_keys ? post_data_final.env_cd_configmap_keys : null,
+                    post_data_final.env_cd_secret_keys ? post_data_final.env_cd_secret_keys : null,
+                    post_data_final.env_cd_container_security_context ? post_data_final.env_cd_container_security_context : null,
+                    post_data_final.env_cd_pod_security_context ? post_data_final.env_cd_pod_security_context : null,
+                    state.cd_settings)
+            }
+        ))
+        if (post_data_final.cd_id) {
+            post_data_final.status = panel_object.status
+            post_data_final.id = panel_object.id
+        }
+        console.log(post_data_final, "post_data_final___")
+        showSnackbar('info', 'Saving deployment details')
+        if (post_data_final.cd_id) {
+            if ((state.cd_settings && state.cd_settings[0]) && (state.cd_settings[0].value && state.cd_settings[0].value == "true")) {
+                PostData(GenerateURL({
+                    service_id: component_id,
+                    component_env_id: component_env_id,
+                    cd_id: post_data_final.cd_id,
+                }, properties.api.save_versioning), { ...post_data_final, component_env_id: component_env_id }, onSaveSuccess, onSaveFail);
+            } else {
+                PostData(GenerateURL({
+                    service_id: component_id,
+                    component_env_id: component_env_id,
+                    id: post_data_final.cd_id
+                }, properties.api.edit_cd), { ...post_data_final, component_env_id: component_env_id }, onSaveSuccess, onSaveFail);
+            }
+
+        } else {
+            PostData(GenerateURL({ service_id: component_id, component_env_id: component_env_id }, properties.api.save_cd), { ...post_data_final, component_env_id: component_env_id }, onSaveSuccess, onSaveFail);
+        }
+
+        setState(new_state => ({
+            ...new_state,
+            data_loading: true
+        }));
+    }
+
+    function onSaveFail(error) {
+
+        var error_msg = showErrorHandlerUpdated(error)
+        showSnackbar('error', 'failed to configure deployment details', error_msg)
+        setState(new_state => ({
+            ...new_state,
+            data_loading: false,
+            error_in_save_cd: error_msg
+        }));
+
+    }
+    function onSaveSuccess(response) {
+        showSnackbar('success', 'Deployment details configured')
+        setRedirect(true);
+        setState(new_state => ({
+            ...new_state,
+            data_loading: false
+        }));
+    }
+
+    console.log(state.cd_settings, "cdsettings ==========>")
+
+    function getComponentDetails() {
+        var requestInfo = {
+            endPoint: GenerateURL({ service_id: component_id }, properties.api.service_basic_details_get_url),
+            httpMethod: "GET",
+            httpHeaders: { "Content-Type": "application/json" }
+        }
+        InvokeApi(requestInfo, handleResponse, handleError)
+    }
+    useEffect(() => {
+        getComponentDetails();
+
+    }, []);
+
+    function handleResponse(response) {
+        serviceName = response.name;
+
+        fetchEnvList()
+        setState(new_state => ({
+            ...new_state,
+            service_name: response.name,
+            build_strategy: response.build_strategy,
+        }));
+
+
+    }
+
+    function handleError(error) {
+        return error;
+    }
+
+    function fetchCdData(clone_env_id, clone_deploy_id, cd_settings) {
+        console.log(clone_env_id, clone_deploy_id, "clone_deploy_id__")
+        var requestInfo = {
+            endPoint: GenerateURL({ service_id: component_id, component_env_id: clone_env_id ? clone_env_id : component_env_id }, properties.api.save_cd),
+            httpMethod: "GET",
+            httpHeaders: { "Content-Type": "application/json" }
+        }
+        if (clone_env_id && clone_deploy_id) {
+            requestInfo.endPoint = GenerateURL({ service_id: component_id, component_env_id: clone_env_id, id: clone_deploy_id }, properties.api.edit_cd)
+        }
+        InvokeApi(requestInfo, (response) => { onEditFetchSuccess(response, cd_settings) }, onEditFetchFail);
+        setState(new_state => ({
+            ...new_state,
+            data_loading: true
+        }));
+    }
+
+    function onEditFetchSuccess(response, cd_settings) {
+        console.log(response, "fdsfsajfdj")
+        if (cd_id) {
+            var find_current_cd = response.find(item => item.id == cd_id);
+        }
+        if (clone_deploy_id) {
+            var find_current_cd = response;
+        }
+        console.log(response, "fdsfsajfdj")
+        console.log("DEBUG_SA_RESPONSE: find_current_cd =", find_current_cd, "env_cd_service_account =", find_current_cd?.env_cd_service_account, "service_account =", find_current_cd?.service_account);
+        setState(new_state => ({
+            ...new_state,
+            panels: panelFetchDataParser(find_current_cd, clone_env_id, extraProps, clone_deploy_id, cd_settings && cd_settings[0] ? cd_settings : null),
+            data_loading: false
+        }));
+
+    }
+    function onEditFetchFail() {
+        setState(new_state => ({
+            ...new_state,
+            data_loading: false
+        }));
+
+    }
+
+    function fetchEnvList() {
+        var requestInfo = {
+            endPoint: GenerateURL({ service_id: component_id }, properties.api.env_data_post_url),
+            httpMethod: "GET",
+            httpHeaders: { "Content-Type": "application/json" }
+        }
+        InvokeApi(requestInfo, onEnvListFetchSuccess, onEnvListFetchFail)
+    }
+    function onEnvListFetchSuccess(response) {
+        const selectedEnvData = getSelectedEnv(component_env_id, response);
+        fetchSystemSettingsData()
+        extraProps = {
+            namespace_name: selectedEnvData?.project_env?.project_env_namespace?.namespace?.name,
+            namespace_type: selectedEnvData?.project_env?.project_env_namespace?.namespace?.istio_enabled,
+            cluster_id: selectedEnvData.project_env.cluster_id,
+            project_env_name: selectedEnvData.project_env.name,
+            environment_master_name: (properties.envs[selectedEnvData.project_env.environment_master_id - 1].label).toLowerCase(),
+            service_name: state.service_name ? state.service_name : serviceName,
+            hookType: 'deploy',
+            available_deployments: available_deployments,
+            multi_namespace: selectedEnvData?.project_env?.namespaces?.length > 0, // check from selectedEnv
+        }
+        setState(new_state => ({
+            ...new_state,
+            data: {
+                selectedServiceEnv: selectedEnvData,
+                envData: response,
+
+            },
+            extraProps: {
+                namespace_name: selectedEnvData?.project_env?.project_env_namespace?.namespace?.name,
+                istio_enabled: selectedEnvData?.project_env?.project_env_namespace?.namespace?.istio_enabled,
+                cluster_id: selectedEnvData.project_env.cluster_id,
+                project_env_name: selectedEnvData.project_env.name,
+                project_env_id: selectedEnvData.project_env.id,
+                environment_master_name: (properties.envs[selectedEnvData.project_env.environment_master_id - 1].label).toLowerCase(),
+                service_name: new_state.service_name,
+                hookType: 'deploy',
+                component_env_id: component_env_id,
+                service_id: component_id,
+                application_id: application_id,
+                available_deployments: available_deployments,
+                multi_namespace: selectedEnvData?.project_env?.namespaces?.length > 0, // check from selectedEnv
+            }
+        }));
+
+
+    }
+
+    function onEnvListFetchFail() {
+    }
+    var url = GenerateURL({ service_id: component_id, component_id: component_env_id }, properties.api.save_cd, true);
+
+
+
+    function fetchSystemSettingsData() {
+        var requestInfo = {
+            endPoint: GenerateURL({}, properties.api.system_settings),
+            httpMethod: "GET",
+            httpHeaders: { "Content-Type": "application/json" }
+        }
+        InvokeApi(requestInfo, fetchSystemSettingsDataSuccess, fetchSystemSettingsDataFailed);
+
+        setState(new_state => ({
+            ...new_state,
+            data_loading: true
+        }))
+
+    }
+    function fetchSystemSettingsDataSuccess(data) {
+
+        var filter_cd_versioning_data = data.filter(item => item.key == "VERSIONING_CD_ENABLE");
+        console.log(filter_cd_versioning_data, "fdsjkajkfdsa")
+        if ((window.location.href).toString().charAt((window.location.href).toString().length - 1) == "d") {
+            if (clone_env_id || clone_deploy_id) {
+                fetchCdData(clone_env_id, clone_deploy_id, filter_cd_versioning_data)
+            }
+        } else {
+            fetchCdData(null, null, filter_cd_versioning_data);
+        }
+        setState(new_state => ({
+            ...new_state,
+            available_settings: data,
+            cd_settings: filter_cd_versioning_data,
+            data_loading: false
+        }));
+
+    }
+    console.log(state.cd_settings, "fdsakfjasj")
+    function fetchSystemSettingsDataFailed(error) {
+        setState(new_state => ({
+            ...new_state,
+            error: error,
+            data_loading: false
+        }))
+    }
+
+
+    console.log(state, 'state+--2332');
+
+    return (
+        <>
+            {/* {
+            is_permited ? */}
+
+            <div className={classes.root}>
+               <div>
+                    <Button
+                        variant="back"
+                        startIcon="ri-arrow-left-s-line"
+                        onClick={() => safeNavigateBack(navigate, `/application/${application_id}/service/${component_id}/detail?deploy_details=true&env_id=${component_env_id}`)}
+                    >
+                        Back
+                    </Button>
+               </div>
+                <div className="service-form-heading-section mb-20 d-flex align-center space-between">
+                    <div className="d-flex align-baseline">
+                        <SquareAvatar name="Service Name" varient="single" />
+                        <span className="span-class">
+                            <span style={{ marginBottom: 'var(--space-10)'}} className="service-name">Deploy Details for&nbsp;
+                                {state.service_name?.length > 30 ?
+                                    <>
+                                        <Tooltip title={state.service_name}>
+                                            <span>{state.service_name.substring(0, 30) + "..."}</span>
+                                        </Tooltip>
+                                    </>
+
+                                    :
+                                    <>
+                                        {state.service_name}
+                                    </>
+                                }
+                            </span>
+                            <div className="d-flex align-center">
+                                <span className="text-black font-12">Build Strategy:&nbsp;</span>
+                                <span className="text-color-grey font-12">{state.build_strategy == "EVERY" ? "Build for all environments" : "Build once and promote"}&nbsp;&nbsp;</span>
+                                {state.extraProps ? <>
+                                    <span className="text-black font-12">Env Name:&nbsp;</span>
+                                    <span className="text-color-grey font-12">{state.extraProps.project_env_name}&nbsp;&nbsp;</span>
+                                    <span className="text-black font-12">Environment Master:&nbsp;</span>
+                                    <span className="text-color-grey font-12">{state.extraProps.environment_master_name}</span>
+                                </> : null}
+
+                            </div>
+                        </span>
+                    </div>
+                </div>
+                {state.error_in_save_cd && <AlertStrip variant="error" message={state.error_in_save_cd} />}
+
+
+                <div className="card hide-first-child" style={{ padding: 'var(--space-0)', overflow: 'hidden' }}>
+                    {
+                        state.data_loading ?
+                            <div className="d-flex" style={{ height: 'var(--space-690)' }}><Loading varient="light" /></div> :
+                            state.extraProps ?
+
+                                <StepWizard
+                                    dataJson={state.cd_settings.length > 0 && state.cd_settings[0] && state.cd_settings[0].value ?
+                                        state.cd_settings[0].value == "true" ?
+                                            panel_list : panel_list_2 : panel_list_2
+                                    }
+                                    currentTab={1}
+                                    prev_state={state.panels ?
+                                        {
+                                            ...state, selectedTabOrder: parsed.selectedTabOrder ?
+                                                Number(parsed.selectedTabOrder) :
+                                                location ? location.query ?
+                                                    location.query.selectedTabOrder : 1 : 1
+                                        } :
+                                        null}
+                                    onSubmit={onSubmit}
+                                    extraProps={state.extraProps ? state.extraProps : extraProps}
+                                    enableSaveAndExit={!!cd_id} 
+                                    cancelButtonUrl={goBack}
+                                />
+
+                                : null
+                    }
+
+
+                    <>
+                        {
+                            canRedirect ? <Navigate to={"/application/" + application_id + "/service/" + component_id + "/detail?deploy_details=true&env_id=" + component_env_id} /> : null
+                        }
+
+                    </>
+                </div>
+            </div>
+            {/* // :<ErrorPage is_unautherized = {true} />} */}
+        </>
+    )
+}
+
+CdInfo.propTypes = {
+    ...PropTypes.objectOf(PropTypes.any),
+}
+
+export default CdInfo;
+
+const getDefaultPortDetails = (data) => ({
+    port: data.port || "",
+    target_port: data.port || "",
+    name: data.name || "",
+    protocol: "TCP",
+});
+
+const getManifestFilePaths = (fileUploadedData) => {
+    if (fileUploadedData.fileUpload && fileUploadedData.fileUpload.files) {
+        return fileUploadedData.fileUpload.files;
+    } else if (fileUploadedData.data && fileUploadedData.data.uploaded_file) {
+        return [{ name: fileUploadedData.data.uploaded_file }];
+    }
+    return null;
+};
+
+const getEnvCdAccessDetail = (fileUploadedData) => {
+    if (!fileUploadedData || !fileUploadedData.data) return [];
+    return [getDefaultPortDetails(fileUploadedData.data)];
+};
+
+
+function panelPostDataParser(panel_no,
+    panel_data,
+    env_cd_configmap,
+    env_cd_secret,
+    env_cd_pvc_variable,
+    env_cd_empty_dir,
+    env_cd_host_path,
+    env_cd_configmap_keys,
+    env_cd_secret_keys,
+    env_cd_container_security_context,
+    env_cd_pod_security_context,
+    cd_settings) {
+    var post_data = {}
+    var env_cd_configmap = env_cd_configmap ? env_cd_configmap : [];
+    var env_cd_secret = env_cd_secret ? env_cd_secret : [];
+    var env_cd_pvc_variable = env_cd_pvc_variable ? env_cd_pvc_variable : []
+    var env_cd_empty_dir = env_cd_empty_dir ? env_cd_empty_dir : []
+    var env_cd_host_path = env_cd_host_path ? env_cd_host_path : [];
+    var env_cd_configmap_keys = env_cd_configmap_keys ? env_cd_configmap_keys : [];
+    var env_cd_secret_keys = env_cd_secret_keys ? env_cd_secret_keys : [];
+    var env_cd_container_security_context = env_cd_container_security_context ? env_cd_container_security_context : [];
+    var env_cd_pod_security_context = env_cd_pod_security_context ? env_cd_pod_security_context : [];
+    // eslint-disable-next-line default-case
+    switch (panel_no) {
+        case "0":
+            post_data = { ...post_data, ...panel_data.data };
+            return post_data;
+        case "1":
+            let widget_name = []
+            widget_name.push(panel_data.data.deployment_name)
+            post_data = { ...post_data, ...panel_data.data }
+            // post_data.deployment_names = widget_name ? widget_name : [];
+
+            if (panel_data.multiple_port_support) {
+                post_data = {
+                    ...post_data,
+                }
+                post_data = {
+                    ...post_data,
+                    env_cd_access_detail: panel_data.multiple_port_support.access_level_list
+                }
+                if (panel_data.multiple_port_support.fileUploadedData) {
+                    const fileUploadedData = panel_data.multiple_port_support.fileUploadedData;
+                    post_data = {
+                        ...post_data,
+                        custom_ingress_manifest: {
+                            manifest_meta_data: {
+                                strategy: "UPLOADED_MANIFEST",
+                                manifest_file_paths: getManifestFilePaths(fileUploadedData)
+                            }
+                        },
+                        env_cd_access_detail: getEnvCdAccessDetail(fileUploadedData)
+                    };
+                }
+                if (panel_data.multiple_port_support.gitComponentData) {
+                    console.log(panel_data.multiple_port_support.gitComponentData, "checking components")
+                    post_data = {
+                        ...post_data,
+                        custom_ingress_manifest: {
+                            manifest_meta_data: {
+                                strategy: "GIT_MANIFEST",
+                                manifest_file_paths: [panel_data.multiple_port_support.gitComponentData.gitRepo.file_paths],
+                                manifest_git_repo_id: panel_data.multiple_port_support.gitComponentData && panel_data.multiple_port_support.gitComponentData.gitRepo ?
+                                    panel_data.multiple_port_support.gitComponentData.gitRepo.git_url ? panel_data.multiple_port_support.gitComponentData.gitRepo.git_url : "" : null,
+                                manifest_git_repo_branch: panel_data.multiple_port_support.gitComponentData && panel_data.multiple_port_support.gitComponentData.gitRepo ?
+                                    panel_data.multiple_port_support.gitComponentData.gitRepo.branch_name ? panel_data.multiple_port_support.gitComponentData.gitRepo.branch_name : "" : null,
+                            }
+                        },
+                        env_cd_access_detail: panel_data.multiple_port_support.gitComponentData.data ? panel_data.multiple_port_support.gitComponentData.data.id ?
+                            [{
+                                port: panel_data.multiple_port_support.gitComponentData.data.port ? panel_data.multiple_port_support.gitComponentData.data.port : "",
+                                target_port: panel_data.multiple_port_support.gitComponentData.data.port ? panel_data.multiple_port_support.gitComponentData.data.port : "",
+                                name: panel_data.multiple_port_support.gitComponentData.data.name ? panel_data.multiple_port_support.gitComponentData.data.name : "",
+                                protocol: "TCP",
+                                id: panel_data.multiple_port_support.gitComponentData.data.id ? panel_data.multiple_port_support.gitComponentData.data.id : "",
+                            }] :
+                            [{
+                                port: panel_data.multiple_port_support.gitComponentData.data.port ? panel_data.multiple_port_support.gitComponentData.data.port : "",
+                                target_port: panel_data.multiple_port_support.gitComponentData.data.port ? panel_data.multiple_port_support.gitComponentData.data.port : "",
+                                name: panel_data.multiple_port_support.gitComponentData.data.name ? panel_data.multiple_port_support.gitComponentData.data.name : "",
+                                protocol: "TCP",
+                            }] : []
+                    }
+                }
+                //post_data.custom_ingress_manifest.id = panel_data.multiple_port_support.custom_ingress.id
+
+
+            }
+            if (panel_data.service_account) {
+                var sa_data = panel_data.service_account;
+                const service_account_name = sa_data?.data?.manifest_name ? sa_data.data.manifest_name : "";
+                post_data = {
+                    ...post_data,
+                    service_account: service_account_name,
+                    env_cd_service_account: {
+                        manifest_name: service_account_name,
+                        manifest_meta_data: sa_data.manifest_meta_data ? sa_data.manifest_meta_data : null,
+                    },
+                }
+            }
+            if (!panel_data.service_account) {
+                post_data = {
+                    ...post_data,
+                    service_account: "",
+                    env_cd_service_account: null,
+                }
+            }
+            return post_data;
+
+        case "2":
+            post_data = {
+                ...post_data,
+                requests_memory_quota: panel_data.data.requests_memory_quota,
+                requests_cpu_quota: Number(panel_data.data.requests_cpu_quota) || null,
+            }
+            if (panel_data.data?.specify_request_gpu_quota) {
+                post_data = {
+                    ...post_data,
+                    requests_gpu_quota: {
+                        key: panel_data?.gpu_data?.data?.gpu_key,
+                        value: panel_data?.gpu_data?.data?.gpu_value,
+                    }
+                }
+            } else {
+                post_data = {
+                    ...post_data,
+                    requests_gpu_quota: {},
+                }
+            }
+            if (panel_data.limit_quota) {
+                let limits_quota_data = {
+                    ...panel_data.limit_quota.data,
+                    limits_cpu_quota: Number(panel_data.limit_quota.data?.limits_cpu_quota) || null,
+                }
+                post_data = { ...post_data, ...limits_quota_data }
+                if (panel_data.limit_quota.data?.specify_limit_gpu_quota) {
+                    post_data = {
+                        ...post_data,
+                        limits_gpu_quota: {
+                            key: panel_data?.limit_quota?.gpu_data?.data?.gpu_key,
+                            value: panel_data?.limit_quota?.gpu_data?.data?.gpu_value,
+                        }
+                    }
+                } else {
+                    post_data = {
+                        ...post_data,
+                        limits_gpu_quota: {},
+                    }
+                }
+            } else {
+                post_data = {
+                    ...post_data,
+                    limits_cpu_quota: panel_data.data.requests_cpu_quota,
+                    limits_memory_quota: panel_data.data.requests_memory_quota,
+                    limits_gpu_quota: {},
+                }
+            }
+            return post_data;
+
+        case "3":
+            console.log("nasbaSBSA", panel_data);
+            if (panel_data.configMap_file_childs && panel_data.configMap_file_childs.configMap_childs) {
+                Object.keys(panel_data.configMap_file_childs.configMap_childs).forEach(key => {
+                    if (key == "data" || key == "child_inherits" || key == "show_view" || key == "count") {
+
+                    } else {
+                        const configMap = panel_data.configMap_file_childs.configMap_childs[key].data;
+
+                        var configMapData = {
+                            name: configMap.configMap_name,
+                            mount_path: configMap.configMap_mount_path,
+                        }
+                        if (configMap.id) {
+                            configMapData.id = configMap.id
+                        }
+                        env_cd_configmap = [...env_cd_configmap, configMapData]
+
+                    }
+                })
+            }
+            post_data.env_cd_configmap = env_cd_configmap;
+
+            if (panel_data.configMap_sub_childs && panel_data.configMap_sub_childs.configMap_childs) {
+                Object.keys(panel_data.configMap_sub_childs.configMap_childs).forEach(key => {
+                    if (key == "data" || key == "child_inherits" || key == "show_view" || key == "count") {
+
+                    } else {
+                        const configMap = panel_data.configMap_sub_childs.configMap_childs[key].data;
+
+                        var configMapData = {
+                            name: configMap.configMap_name,
+                            mount_path: configMap.configMap_mount_path,
+
+                        }
+                        if (configMap.id) {
+                            configMapData.id = configMap.id
+                        }
+                        env_cd_configmap = [...env_cd_configmap, configMapData]
+
+                    }
+                })
+            }
+            post_data.env_cd_configmap = env_cd_configmap;
+
+            if (panel_data.configMap_sub_childs && panel_data.configMap_sub_childs.configMap_SubPath_childs) {
+
+                Object.keys(panel_data.configMap_sub_childs.configMap_SubPath_childs).forEach(key => {
+                    if (key == "data" || key == "child_inherits" || key == "show_view" || key == "count" || key == "error" || key == "validation") {
+
+                    } else {
+                        const configMapObject = panel_data.configMap_sub_childs.configMap_SubPath_childs[key];
+                        console.log("jnskncsdmk", configMapObject)
+                        let sub_path_key_value = [];
+                        let configMapKeyPathData = {
+                            name: configMapObject.data.comfigMap_for_subpath,
+                        }
+
+                        if (configMapObject && configMapObject.configMap_keys_child) {
+                            Object.keys(configMapObject.configMap_keys_child).forEach(key => {
+                                if (key == "data" || key == "child_inherits" || key == "show_view" || key == "count" || key == "error" || key == "validation" || key == "order_array") {
+
+                                } else {
+                                    const configMapKeyPathObject = configMapObject.configMap_keys_child[key].data;
+
+                                    let subPathObject = {
+                                        name: configMapKeyPathObject.configMap_key,
+                                        sub_path: configMapKeyPathObject.sub_path,
+                                    }
+                                    sub_path_key_value = [...sub_path_key_value, subPathObject]
+                                }
+                            })
+                        }
+                        if (sub_path_key_value.length > 0) {
+                            configMapKeyPathData.sub_path_key_value = sub_path_key_value;
+                        }
+
+                        env_cd_configmap_keys = [...env_cd_configmap_keys, configMapKeyPathData];
+                    }
+                })
+            }
+
+            post_data.env_cd_configmap_keys = env_cd_configmap_keys;
+
+            if (panel_data.secret_file_childs && panel_data.secret_file_childs.secert_childs) {
+                Object.keys(panel_data.secret_file_childs.secert_childs).forEach(key => {
+                    if (key == "data" || key == "child_inherits" || key == "show_view" || key == "count") {
+
+                    } else {
+                        const secret = panel_data.secret_file_childs.secert_childs[key].data;
+                        var secretData = { "name": secret.secret_name, "mount_path": secret.secret_mount_path }
+                        if (secret.id) {
+                            secretData.id = secret.id
+                        }
+                        env_cd_secret = [...env_cd_secret, secretData]
+                    }
+                })
+            }
+            post_data.env_cd_secret = env_cd_secret;
+
+            if (panel_data.secret_sub_childs && panel_data.secret_sub_childs.secret_SubPath_childs) {
+
+                Object.keys(panel_data.secret_sub_childs.secret_SubPath_childs).forEach(key => {
+                    if (key == "data" || key == "child_inherits" || key == "show_view" || key == "count" || key == "error" || key == "validation") {
+
+                    } else {
+                        const secretObject = panel_data.secret_sub_childs.secret_SubPath_childs[key];
+                        let sub_path_key_value = [];
+                        let secretKeyPathData = {
+                            name: secretObject.data?.secret_for_subpath,
+                        }
+
+                        if (secretObject && secretObject.secret_keys_child) {
+                            Object.keys(secretObject.secret_keys_child).forEach(key => {
+                                if (key == "data" || key == "child_inherits" || key == "show_view" || key == "count" || key == "error" || key == "validation" || key == "order_array") {
+
+                                } else {
+                                    const secretKeyPathObject = secretObject.secret_keys_child[key].data;
+
+                                    let subPathObject = {
+                                        name: secretKeyPathObject.secret_key,
+                                        sub_path: secretKeyPathObject.sub_path,
+                                    }
+                                    sub_path_key_value = [...sub_path_key_value, subPathObject]
+                                }
+                            })
+                        }
+                        if (sub_path_key_value.length > 0) {
+                            secretKeyPathData.sub_path_key_value = sub_path_key_value;
+                        }
+
+                        env_cd_secret_keys = [...env_cd_secret_keys, secretKeyPathData];
+                    }
+                })
+            }
+
+            post_data.env_cd_secret_keys = env_cd_secret_keys;
+
+            return post_data;
+        case "4":
+            console.log("nasbaSBSA", panel_data);
+            if (panel_data.empty_dir_childs && panel_data.empty_dir_childs.secert_childs) {
+                Object.keys(panel_data.empty_dir_childs.secert_childs).forEach(key => {
+                    if (key == "data" || key == "child_inherits" || key == "show_view" || key == "count") {
+
+                    } else {
+                        const emptyDir = panel_data.empty_dir_childs.secert_childs[key].data;
+                        var emptyDirData = { "name": emptyDir.name, "mount_path": emptyDir.mount_path }
+                        if (emptyDir.id) {
+                            emptyDirData.id = emptyDir.id
+                        }
+                        env_cd_empty_dir = [...env_cd_empty_dir, emptyDirData]
+                    }
+                })
+            }
+            post_data.env_cd_empty_dir = env_cd_empty_dir;
+            if (panel_data.host_path_childs && panel_data.host_path_childs.hostpath_form_childs) {
+                Object.keys(panel_data.host_path_childs.hostpath_form_childs).forEach(key => {
+                    if (key == "data" || key == "child_inherits" || key == "show_view" || key == "count") {
+
+                    } else {
+                        const hostPathEntry = panel_data.host_path_childs.hostpath_form_childs[key].data;
+
+                        var hostFormData = { "name": hostPathEntry.name, "mount_path": hostPathEntry.mount_path, "host_path": hostPathEntry.host_path }
+                        if (hostPathEntry.id) {
+                            hostFormData.id = hostPathEntry.id
+                        }
+                        env_cd_host_path = [...env_cd_host_path, hostFormData]
+                    }
+                })
+            }
+            post_data.env_cd_host_path = env_cd_host_path;
+
+            if (panel_data.pvc_file_childs && panel_data.pvc_file_childs.pvc_childs) {
+                Object.keys(panel_data.pvc_file_childs.pvc_childs).forEach(key => {
+                    if (key == "data" || key == "child_inherits" || key == "show_view" || key == "count") {
+
+                    } else {
+                        const pvcs = panel_data.pvc_file_childs.pvc_childs[key].data;
+
+                        var pvcsData = {
+                            pvc_name: pvcs.pvc_name,
+                            pvc_path: pvcs.pvc_path,
+                        }
+                        if (pvcsData.id) {
+                            pvcsData.id = pvcs.id
+                        }
+                        env_cd_pvc_variable = [...env_cd_pvc_variable, pvcsData]
+
+                    }
+                })
+            }
+            post_data.env_cd_pvc_variable = env_cd_pvc_variable;
+
+            if (panel_data.entry_point_childs) {
+                post_data = { ...post_data, ...panel_data.entry_point_childs.data }
+            } else {
+                post_data = { ...post_data, entrypoint: null }
+            }
+            return post_data;
+
+        case "5":
+            var env_cd_deploy_variable = [];
+            var env_cd_field_ref_variable = [];
+            // var env_cd_configmap =[];
+            // var env_cd_secret = [];
+            if (panel_data.env_var_raw_input && panel_data.env_var_raw_input.multi_row) {
+                Object.keys(panel_data.env_var_raw_input.multi_row).forEach(key => {
+                    if (key == "data" || key == "child_inherits" || key == "show_view" || key == "count") {
+
+                    } else {
+                        env_cd_deploy_variable = [...env_cd_deploy_variable, panel_data.env_var_raw_input.multi_row[key].data]
+                    }
+                })
+
+            }
+            if (panel_data.env_var_configMap && panel_data.env_var_configMap.configMap_envvar) {
+                Object.keys(panel_data.env_var_configMap.configMap_envvar).forEach(key => {
+                    if (key == "data" || key == "child_inherits" || key == "show_view" || key == "count") {
+
+                    } else {
+                        var configMapEntry = panel_data.env_var_configMap.configMap_envvar[key].data;
+                        if (configMapEntry.as_env_var) {
+                            var configMapData = {
+                                name: configMapEntry.configMap_name,
+                                mount_path: null,
+                            }
+                            if (configMapEntry.id) {
+                                configMapData.id = configMapEntry.id
+                            }
+                            env_cd_configmap = [...env_cd_configmap, configMapData]
+                            post_data.env_cd_configmap = env_cd_configmap;
+                        } else {
+                            env_cd_deploy_variable = [...env_cd_deploy_variable, {
+                                env_key: configMapEntry.configMap_service_key,
+                                value_from_configmap: {
+                                    name: configMapEntry.configMap_name,
+                                    key: configMapEntry.configMap_key
+                                }
+                            }]
+                        }
+                    }
+                })
+
+            }
+            if (panel_data.env_var_secret && panel_data.env_var_secret.secert_envvar) {
+                Object.keys(panel_data.env_var_secret.secert_envvar).forEach(key => {
+                    if (key == "data" || key == "child_inherits" || key == "show_view" || key == "count") {
+
+                    } else {
+                        var secretEntry = panel_data.env_var_secret.secert_envvar[key].data;
+                        if (secretEntry.as_env_var) {
+                            var secretData = {
+                                "name": secretEntry.secret_name,
+                                "mount_path": null
+                            }
+                            if (secretEntry.id) {
+                                secretData.id = secretEntry.id
+                            }
+                            env_cd_secret = [...env_cd_secret, secretData]
+                            post_data.env_cd_secret = env_cd_secret;
+                        } else {
+                            env_cd_deploy_variable = [...env_cd_deploy_variable, {
+                                env_key: secretEntry.secret_service_key,
+                                value_from_secret: {
+                                    name: secretEntry.secret_name,
+                                    key: secretEntry.secret_key
+                                }
+                            }]
+                        }
+                    }
+                })
+
+            }
+            if (panel_data.env_var_field_ref && panel_data.env_var_field_ref.fields_ref_envvar) {
+                Object.keys(panel_data.env_var_field_ref.fields_ref_envvar).forEach(key => {
+                    if (key == "data" || key == "child_inherits" || key == "show_view" || key == "count") {
+
+                    } else {
+                        env_cd_field_ref_variable = [...env_cd_field_ref_variable, panel_data.env_var_field_ref.fields_ref_envvar[key].data]
+                    }
+                })
+
+            }
+            post_data.env_cd_field_ref_variable = env_cd_field_ref_variable;
+            post_data.env_cd_deploy_variable = env_cd_deploy_variable;
+            return post_data;
+
+        case "6":
+            if (panel_data.NodeAffinityRequired_data || panel_data.NodeAffinityPreffered_data) {
+                var temp_node_aff_reqd_array = new Array();
+                var temp_node_aff_pre_array = new Array();
+                if (panel_data.NodeAffinityRequired_data && panel_data.NodeAffinityRequired_data.node_affinity) {
+                    temp_node_aff_reqd_array = [...temp_node_aff_reqd_array, ...getNodeAffinity(panel_data.NodeAffinityRequired_data.node_affinity)]
+                }
+                if (panel_data.NodeAffinityPreffered_data && panel_data.NodeAffinityPreffered_data.node_affinity_preferred) {
+                    temp_node_aff_pre_array = [...temp_node_aff_pre_array, ...getNodeAffinity(panel_data.NodeAffinityPreffered_data.node_affinity_preferred)]
+                }
+                var final_node_array = new Array();
+                if (temp_node_aff_pre_array.length > 0) {
+                    final_node_array = [...final_node_array, {
+                        affinity_choice: "PREFERRED",
+                        key_value_with_operator: temp_node_aff_pre_array
+                    }]
+                }
+                if (temp_node_aff_reqd_array.length > 0) {
+                    final_node_array = [...final_node_array, {
+                        affinity_choice: "REQUIRED",
+                        key_value_with_operator: temp_node_aff_reqd_array
+                    }]
+                }
+                post_data.env_cd_node_affinity = final_node_array;
+            }
+            if (panel_data.ServiceAffinity_data || panel_data.ServiceAntiAffinity_data) {
+                post_data.env_cd_pod_affinity = getPodAffinity(panel_data.ServiceAffinity_data, panel_data.ServiceAntiAffinity_data)
+            }
+            return post_data
+        case "7":
+            if (panel_data.env_cd_container_security_context && panel_data.env_cd_container_security_context.container_security_context_childs) {
+                Object.keys(panel_data.env_cd_container_security_context.container_security_context_childs).forEach(key => {
+                    if (key == "data" || key == "child_inherits" || key == "show_view" || key == "count") {
+
+                    } else {
+                        var container_security_context = panel_data.env_cd_container_security_context.container_security_context_childs[key].data;
+
+                        env_cd_container_security_context = [...env_cd_container_security_context, {
+                            'key': container_security_context.key,
+                            'value': container_security_context.value
+                        }]
+
+                    }
+                })
+
+            }
+            post_data.env_cd_container_security_context = env_cd_container_security_context;
+            if (panel_data.env_cd_pod_security_context && panel_data.env_cd_pod_security_context.pod_security_context_childs) {
+                Object.keys(panel_data.env_cd_pod_security_context.pod_security_context_childs).forEach(key => {
+                    if (key == "data" || key == "child_inherits" || key == "show_view" || key == "count") {
+
+                    } else {
+                        var pod_security_context = panel_data.env_cd_pod_security_context.pod_security_context_childs[key].data;
+
+                        env_cd_pod_security_context = [...env_cd_pod_security_context, {
+                            value: pod_security_context.value,
+                            key: pod_security_context.key
+                        }]
+
+                    }
+                })
+
+            }
+            post_data.env_cd_pod_security_context = env_cd_pod_security_context;
+            return post_data;
+        case "8":
+            post_data = { ...post_data, ...panel_data.data };
+            if (panel_data.data.tolerations) {
+                if (panel_data.tolerations_data && panel_data.tolerations_data.tolerations) {
+                    post_data.env_cd_tolerations = panel_data.tolerations_data.tolerations.length > 0 ? panel_data.tolerations_data.tolerations : [];
+                }
+            } else {
+                post_data.env_cd_tolerations = null
+            }
+
+            if (panel_data.priorities_data) {
+                post_data.priority_class = panel_data.priorities_data.data && panel_data.priorities_data.data.priority ?
+                    panel_data.priorities_data.data.priority : null
+            } else {
+                post_data.priority_class = null
+            }
+            console.log(post_data, "testing for data")
+            return post_data
+
+        case "9":
+            if (panel_data.data.max_surge || panel_data.data.max_unavailable) {
+                if (panel_data.data.id) {
+                    post_data.env_cd_deployment_strategy = {
+                        max_surge: panel_data.data.max_surge,
+                        max_unavailable: panel_data.data.max_unavailable,
+                        minimum_ready: panel_data.data.minimum_ready,
+                        "progress_deadline": panel_data.data.progress_deadline,
+                        "termination_grace_period": panel_data.data.termination_grace_period,
+                        "revision_history_limit": panel_data.data.revision_history_limit,
+                        release_template_id: panel_data.data.canary_template_1 ? panel_data.canary_template && panel_data.canary_template.data ? panel_data.canary_template.data.release_template_id : "" : null,
+                        id: panel_data.data.id
+                    }
+                }
+                else {
+                    post_data.env_cd_deployment_strategy = {
+                        max_surge: panel_data.data.max_surge,
+                        max_unavailable: panel_data.data.max_unavailable,
+                        minimum_ready: panel_data.data.minimum_ready,
+                        "progress_deadline": panel_data.data.progress_deadline,
+                        "termination_grace_period": panel_data.data.termination_grace_period,
+                        "revision_history_limit": panel_data.data.revision_history_limit,
+                        release_template_id: panel_data.data.canary_template_1 ? panel_data.canary_template && panel_data.canary_template.data ? panel_data.canary_template.data.release_template_id : "" : null
+                    }
+                }
+            }
+            post_data.deployment_rollback_validation = panel_data.data.deployment_rollback_validation
+            post_data.server_side_apply = panel_data.data.server_side_apply;
+            if (panel_data.data.liveliness) {
+                post_data.env_cd_liveness_probe = { ...panel_data.Liveness_data.data }
+            }
+            if (panel_data.data.readiness) {
+                post_data.env_cd_readiness_probe = { ...panel_data.Readiness_data.data }
+            }
+            return post_data;
+        case "10":
+            var post_data = {};
+            post_data.labels = panel_data.labels ? keyValueParser(panel_data.labels) : [];
+            post_data.label_selectors = panel_data.label_selectors ? keyValueParser(panel_data.label_selectors) : [],
+                post_data.annotations = panel_data.annotations ? keyValueParser(panel_data.annotations) : [];
+            return post_data;
+        case "11":
+            console.log("Panel 11 data:", panel_data);
+            console.log("host_mapping switch:", panel_data.data.host_mapping);
+            console.log("host_mapping_pod:", panel_data.host_mapping_pod);
+            if (!panel_data.data || !panel_data.data.additional_manifest_enabled) {
+                post_data.env_cd_other_manifest = null;
+                return post_data;
+            }
+            var active_tab = panel_data.data && panel_data.data.active_tab;
+            if (active_tab === 'file_upload' && panel_data.fileUpload && panel_data.fileUpload.files && panel_data.fileUpload.files.length > 0) {
+                post_data.env_cd_other_manifest = {
+                    manifest_meta_data: {
+                        strategy: 'UPLOADED_MANIFEST',
+                        manifest_file_paths: panel_data.fileUpload.files,
+                    },
+                };
+            } else if (active_tab === 'git_url' && panel_data.gitRepo && panel_data.gitRepo.git_url) {
+                post_data.env_cd_other_manifest = {
+                    manifest_meta_data: {
+                        strategy: 'GIT_MANIFEST',
+                        manifest_git_repo_id: panel_data.gitRepo.git_url,
+                        manifest_git_repo_branch: panel_data.gitRepo.branch_name,
+                        manifest_file_paths: panel_data.gitRepo.file_paths ? [panel_data.gitRepo.file_paths] : [],
+                    },
+                };
+            } else if (active_tab === 'yaml_editor' && panel_data.data && panel_data.data.yaml_content) {
+                post_data.env_cd_other_manifest = {
+                    manifest_meta_data: {
+                        strategy: 'YAML_MANIFEST',
+                        manifest_file_paths: [
+                            {
+                                content: btoa(panel_data.data.yaml_content),
+                                event_name: 'files',
+                                name: 'manifest.yaml',
+                            },
+                        ],
+                    },
+                };
+            }
+            return post_data;
+        case "12":
+            var post_data = {};
+            var pre_hook_array = new Array();
+            var post_hook_array = new Array();
+            if (panel_data.add_post_hook && (panel_data.add_post_hook.post_hook_childs && Object.keys(panel_data.add_post_hook.post_hook_childs).length > 3)) {
+                post_hook_array = hookDataParserForReorderComponent(panel_data.add_post_hook.post_hook_childs, "POST");
+            }
+            if (panel_data.add_pre_hook && (panel_data.add_pre_hook.pre_hook_childs && Object.keys(panel_data.add_pre_hook.pre_hook_childs).length > 3)) {
+                pre_hook_array = hookDataParserForReorderComponent(panel_data.add_pre_hook.pre_hook_childs, "PRE");
+            }
+            post_data.env_cd_hook = (panel_data.add_post_hook || panel_data.add_pre_hook) ? [...pre_hook_array, ...post_hook_array] : []
+            post_data.queue_name = panel_data.data.queue_name && panel_data.data.queue_name !== "" ? panel_data.data.queue_name : null
+            if (panel_data.data && panel_data.data.host_mapping === true && panel_data.host_mapping_pod) {
+                post_data.host_mapping = hostMappingDataParser(panel_data.host_mapping_pod);
+                console.log("Parsed host_mapping:", post_data.host_mapping);
+            } else {
+                post_data.host_mapping = null;
+            }
+            return post_data;
+        case "13":
+            post_data = {
+                ...post_data,
+                ...panel_data.data,
+            };
+            if (cd_settings[0] && cd_settings[0].value && cd_settings[0].value == "true") {
+                if (panel_data.gitRepo) {
+                    post_data = {
+                        ...post_data,
+                        versioning_repo_id: panel_data.gitRepo ? panel_data.gitRepo.git_url ? panel_data.gitRepo.git_url : "" : null,
+                        draft_branch: panel_data.gitRepo && panel_data.gitRepo.draft_branch,
+                        main_branch: panel_data.gitRepo && panel_data.gitRepo.main_branch,
+                        deployed_branch: panel_data.gitRepo && panel_data.gitRepo.deployed_branch,
+                        versioning_path: panel_data.gitRepo && panel_data.gitRepo.versioning_path ? panel_data.gitRepo.versioning_path : null,
+                        auto_refresh: panel_data.gitRepo && panel_data.gitRepo.auto_refresh == 1 ? true : false
+                    }
+                }
+            } else {
+                post_data = {
+                    versioning_repo: null
+                }
+            }
+            return post_data;
+    }
+}
+
+function getNodeAffinity(data) {
+    var final_array = new Array();
+    if (data)
+        Object.keys(data).forEach(node => {
+            if (node == "data" || node == "child_inherits" || node == "show_view" || node == "count") {
+
+            } else {
+                final_array = [...final_array, data[node].data]
+            }
+        })
+    var filtered = final_array.filter(function (el) {
+        return el != null;
+    });
+
+    return filtered;
+}
+function getPodAffinity(affinity, anti_affinity) {
+    var temp_pod_affinity = new Array()
+    if (affinity) {
+        affinity.data.required.forEach(aff => {
+            temp_pod_affinity = [...temp_pod_affinity, {
+                affinity_choice: "REQUIRED",
+                affinity_type: true,
+                component_id: aff,
+                key_value_with_operator: null
+            }]
+        })
+        affinity.data.preffered.forEach(aff => {
+            if (!affinity.data.required.includes(aff))
+                temp_pod_affinity = [...temp_pod_affinity, {
+                    affinity_choice: "PREFERRED",
+                    affinity_type: true,
+                    component_id: aff,
+                    key_value_with_operator: null
+                }]
+        })
+    }
+    if (anti_affinity) {
+        anti_affinity.data.required.forEach(aff => {
+            if (affinity) {
+                if (!affinity.data.required.includes(aff) && !affinity.data.preffered.includes(aff)) {
+                    temp_pod_affinity = [...temp_pod_affinity, {
+                        affinity_choice: "REQUIRED",
+                        affinity_type: false,
+                        component_id: aff,
+                        key_value_with_operator: null
+                    }]
+                }
+            }
+            else {
+                temp_pod_affinity = [...temp_pod_affinity, {
+                    affinity_choice: "REQUIRED",
+                    affinity_type: false,
+                    component_id: aff
+                }]
+            }
+        })
+        anti_affinity.data.preffered.forEach(aff => {
+            if (affinity) {
+                if (!affinity.data.required.includes(aff) && !affinity.data.preffered.includes(aff) && !anti_affinity.data.required.includes(aff)) {
+                    temp_pod_affinity = [...temp_pod_affinity, {
+                        affinity_choice: "PREFERRED",
+                        affinity_type: false,
+                        component_id: aff,
+                        key_value_with_operator: null
+                    }]
+                }
+            }
+            else {
+                temp_pod_affinity = [...temp_pod_affinity, {
+                    affinity_choice: "PREFERRED",
+                    affinity_type: false,
+                    component_id: aff
+                }]
+            }
+        })
+    }
+    return temp_pod_affinity;
+}
+
+
+function getListForClone(data) {
+    console.log(data, "fdasfdsafd")
+    // if(data.env_cd_access_detail && data.env_cd_access_detail.length> 0  ){
+    let final_arr = data.env_cd_access_detail.map(item => {
+        return {
+            name: item.name,
+            ingress_id: item.ingress_id ? item.ingress_id : null,
+            gateway_id: item.gateway_id ? item.gateway_id : null,
+            protocol: "TCP",
+            access_level: item.access_level,
+            port: item.port,
+            target_port: item.target_port,
+            expose_path: item.expose_path ? item.expose_path : null,
+            expose_url: item.expose_url ? item.expose_url : null
+        }
+    })
+    return final_arr
+    // }
+
+}
+function panelFetchDataParser(data, clone_env_id, extraProps, clone_deploy_id, cd_settings) {
+
+    var panels = {};
+    panels.status = data?.status;
+    panels.id = data && data.id;
+    const service_name = extraProps ? extraProps.service_name : "";
+    const env_master = extraProps ? extraProps.environment_master_name : "";
+    const project_env_name = extraProps ? extraProps.project_env_name : "";
+    var data_post_for_versioing = (cd_settings && cd_settings[0]) && (cd_settings[0].value && cd_settings[0].value == "true")
+    console.log(data, clone_env_id, clone_deploy_id, service_name, "data_post_for_versioing")
+    const sa = data?.env_cd_service_account ? data.env_cd_service_account : {};
+    const getNonEmptyString = (...values) => {
+        for (let i = 0; i < values.length; i++) {
+            const value = values[i];
+            if (typeof value === "string" && value.trim() !== "") {
+                return value;
+            }
+        }
+        return "";
+    };
+    const getServiceAccountName = () => {
+        // First try all known paths as strings
+        const result = getNonEmptyString(
+            sa?.manifest_name,
+            sa?.manifest_meta_data?.manifest_name,
+            sa?.service_account_name,
+            sa?.service_account,
+            sa?.data?.manifest_name,
+            sa?.data?.service_account_name,
+            sa?.data?.service_account,
+            sa?.name,
+            sa?.account_name,
+            data?.service_account,
+            data?.manifest_name,
+        );
+        // If data.service_account exists but is not a string (e.g. boolean true), 
+        // check if the name is in env_cd_service_account as a string itself
+        if (!result && data?.env_cd_service_account && typeof data.env_cd_service_account === "string") {
+            return data.env_cd_service_account;
+        }
+        return result;
+    };
+    const service_account_name = getServiceAccountName();
+    console.log("DEBUG_SA: sa=", sa, "service_account_name=", service_account_name, "data.service_account=", data?.service_account, "data.manifest_name=", data?.manifest_name);
+    const has_service_account_data = Boolean(data?.env_cd_service_account || service_account_name);
+
+    function getWidgetEditData() {
+        let arr = []
+        arr.push((service_name + "-" + env_master + "-" + project_env_name))
+        return arr;
+    }
+    panels["1"] = {
+        ...getAccessLevelDefaultState(),
+        data: {
+            service_name: clone_env_id || clone_deploy_id ? service_name ? (service_name + "-" + env_master + "-" + project_env_name) : "" : data.service_name,
+            image_name: clone_env_id || clone_deploy_id ? service_name ? (service_name + "/" + env_master + "/" + project_env_name) : "" : data.image_name,
+            deployment_name: clone_env_id || clone_deploy_id ? service_name ? (service_name + "-" + env_master + "-" + project_env_name) : "" : data.deployment_name,
+            container_name: clone_env_id || clone_deploy_id ? service_name ? (service_name + "-" + env_master + "-" + project_env_name) : "" : data.container_name,
+            desired_replication: data.desired_replication,
+            //desired_replication: clone_env_id || clone_deploy_id ? data.desired_replication : data.desired_replication,
+            deployment_names: clone_env_id || clone_deploy_id ? service_name ? getWidgetEditData() : "" : data.deployment_names,
+            cd_id: clone_env_id ? null : data.id ? data.id : null,
+            image_pull_policy: data.image_pull_policy,
+            service_account: has_service_account_data,
+            selected_namespace_id: data?.selected_namespace?.id,
+            selected_namespace_name: data?.selected_namespace?.name,
+            selected_namespace_istio: data?.selected_namespace?.istio_enabled
+        },
+        multiple_port_support: {
+            ...multiplePortsDefaultState(),
+            custom_ingress_via_git: data.custom_ingress_manifest && data.custom_ingress_manifest.manifest_meta_data ? data.custom_ingress_manifest.manifest_meta_data.strategy === "GIT_MANIFEST" ? true : false : false,
+            custom_ingress_via_file_upload: data.custom_ingress_manifest && data.custom_ingress_manifest.manifest_meta_data ? data.custom_ingress_manifest.manifest_meta_data.strategy === "UPLOADED_MANIFEST" ? true : false : false,
+            custom_ingress_via_git_data: data.custom_ingress_manifest && data.custom_ingress_manifest.manifest_meta_data ? data.custom_ingress_manifest.manifest_meta_data.strategy === "GIT_MANIFEST" ? true : false : false,
+            custom_ingress_via_file_upload_data: data.custom_ingress_manifest && data.custom_ingress_manifest.manifest_meta_data ? data.custom_ingress_manifest.manifest_meta_data.strategy === "UPLOADED_MANIFEST" ? true : false : false,
+            fileUploadedData: data.custom_ingress_manifest && data.custom_ingress_manifest.manifest_meta_data ? data.custom_ingress_manifest.manifest_meta_data.strategy === "UPLOADED_MANIFEST" ? {
+                fileUpload: {},
+                data: data.env_cd_access_detail && data.env_cd_access_detail[0] ? {
+                    name: data.env_cd_access_detail[0].name ? data.env_cd_access_detail[0].name : "",
+                    upload_type: data.custom_ingress_manifest && data.custom_ingress_manifest.manifest_meta_data ? data.custom_ingress_manifest.manifest_meta_data.strategy ? 1 : 2 : null,
+                    protocol: data.env_cd_access_detail[0].protocol ? data.env_cd_access_detail[0].protocol : "",
+                    port: data.env_cd_access_detail[0].port ? data.env_cd_access_detail[0].port : "",
+                    id: data_post_for_versioing ? null : data.env_cd_access_detail[0].id ? data.env_cd_access_detail[0].id : "",
+                    uploaded_file: data.custom_ingress_manifest && data.custom_ingress_manifest.manifest_meta_data ?
+                        data.custom_ingress_manifest.manifest_meta_data.manifest_file_paths && data.custom_ingress_manifest.manifest_meta_data.manifest_file_paths[0] ? data.custom_ingress_manifest.manifest_meta_data.manifest_file_paths[0] : null : null
+                } : {}
+            } : null : null,
+            gitComponentData: data.custom_ingress_manifest && data.custom_ingress_manifest.manifest_meta_data ? data.custom_ingress_manifest.manifest_meta_data.strategy === "GIT_MANIFEST" ?
+                {
+
+                    data: data.env_cd_access_detail && data.env_cd_access_detail[0] ? {
+                        name: data.env_cd_access_detail[0].name ? data.env_cd_access_detail[0].name : "",
+                        upload_type: data.custom_ingress_manifest && data.custom_ingress_manifest.manifest_meta_data ? data.custom_ingress_manifest.manifest_meta_data.strategy ? data.custom_ingress_manifest.manifest_meta_data.strategy == "GIT_MANIFEST" ? 2 : 1 : null : null,
+                        protocol: data.env_cd_access_detail[0].protocol ? data.env_cd_access_detail[0].protocol : "",
+                        port: data.env_cd_access_detail[0].port ? data.env_cd_access_detail[0].port : "",
+                        id: data_post_for_versioing ? null : data.env_cd_access_detail[0].id ? data.env_cd_access_detail[0].id : "",
+                    }
+                        : {},
+                    gitRepo: data.env_cd_access_detail && data.env_cd_access_detail[0] ? {
+                        file_paths: data.custom_ingress_manifest && data.custom_ingress_manifest.manifest_meta_data ?
+                            data.custom_ingress_manifest.manifest_meta_data.manifest_file_paths && data.custom_ingress_manifest.manifest_meta_data.manifest_file_paths[0] ? data.custom_ingress_manifest.manifest_meta_data.manifest_file_paths[0] : null : null,
+                        branch_name: data.custom_ingress_manifest && data.custom_ingress_manifest.manifest_meta_data ?
+                            data.custom_ingress_manifest.manifest_meta_data.manifest_git_repo_branch ? data.custom_ingress_manifest.manifest_meta_data.manifest_git_repo_branch : null : null,
+                        git_url: data.custom_ingress_manifest && data.custom_ingress_manifest.manifest_meta_data ?
+                            data.custom_ingress_manifest.manifest_meta_data.manifest_git_repo_id ? data.custom_ingress_manifest.manifest_meta_data.manifest_git_repo_id : null : null,
+                    } : {}
+                }
+                : null : null,
+            // data:{
+            //     upload_type: data.custom_ingress_manifest ? "manifest-handler" : "guided_form",
+            // },
+            access_level_list: !data.custom_ingress_manifest ?
+                clone_env_id ?
+                    getListForClone(data) :
+                    data_post_for_versioing ? getIngressListAndDeleteIds(data.env_cd_access_detail) :
+                        data.env_cd_access_detail && data.env_cd_access_detail.length > 0 ?
+                            data.env_cd_access_detail : [] : [],
+            custom_ingress: data.custom_ingress_manifest ? clone_env_id ?
+                {
+                    ...getCustomIngressDefaultState(),
+                    data: {
+
+                        custom_ingress_type: data.custom_ingress_manifest && data.custom_ingress_manifest.manifest_meta_data ? data.custom_ingress_manifest.manifest_meta_data.strategy === "GIT_MANIFEST" ? 2 : data.custom_ingress_manifest.manifest_meta_data.strategy === "UPLOADED_MANIFEST" ? 1 : null : null,
+                    },
+                    fileUpload: data.custom_ingress_manifest ? {
+                        files: [{ name: data.custom_ingress_manifest.manifest_meta_data.manifest_file_paths[0] }]
+                    } : {}
+                } : null
+                : null
+        },
+        service_account: has_service_account_data ? (() => {
+            const strategy = sa?.manifest_meta_data?.strategy;
+            const isFile = strategy === "UPLOADED_MANIFEST";
+            const isGit = strategy === "GIT_MANIFEST";
+            return {
+                ...getEnabledComponentServiceNameDefaultState(),
+                data: {
+                    manifest_name: service_account_name,
+                    custom_manifest_type: isGit ? 2 : 1,
+                },
+                fileUpload: isFile && sa.manifest_meta_data?.manifest_file_paths?.length > 0 ? {
+                    files: sa.manifest_meta_data.manifest_file_paths.map(f => ({ name: f }))
+                } : null,
+                gitRepo: isGit ? {
+                    git_url: sa.manifest_meta_data?.manifest_git_repo_id || null,
+                    branch_name: sa.manifest_meta_data?.manifest_git_repo_branch || null,
+                    file_paths: sa.manifest_meta_data?.manifest_file_paths?.[0] || null,
+                } : null,
+                manifest_meta_data: sa?.manifest_meta_data || null,
+            };
+        })() : {
+            ...getEnabledComponentServiceNameDefaultState(),
+            data: {
+                manifest_name: "",
+                custom_manifest_type: 1,
+            }
+        }
+
+    }
+
+    panels["2"] = {
+        ...getResourceQuotaDefaultState(),
+        data: {
+            requests_memory_quota: data.requests_memory_quota,
+            requests_cpu_quota: data.requests_cpu_quota,
+            specify_limit_quota: data.limits_memory_quota ? true : false,
+            auto_scaling_enabled: data.env_cd_scale ? true : false,
+            desired_replication: data.desired_replication,
+            specify_request_gpu_quota: Object.keys(data?.requests_gpu_quota || {}).length > 0 ? true : false,
+        },
+        gpu_data: Object.keys(data?.requests_gpu_quota || {}).length > 0 ?
+            {
+                ...getSpecifyGPUDefaultState(),
+                data: {
+                    gpu_key: data?.requests_gpu_quota?.key,
+                    gpu_value: data?.requests_gpu_quota?.value,
+                },
+            }
+            : {
+                ...getSpecifyGPUDefaultState(),
+            },
+        limit_quota: {
+            ...getSpecifyLimitQuotaDefaultState(),
+            data: {
+                limits_cpu_quota: data.limits_cpu_quota,
+                limits_memory_quota: data.limits_memory_quota,
+                specify_limit_gpu_quota: Object.keys(data?.limits_gpu_quota || {}).length > 0 ? true : false,
+            },
+            gpu_data: Object.keys(data?.limits_gpu_quota || {}).length > 0 ?
+                {
+                    ...getSpecifyGPUDefaultState(),
+                    data: {
+                        gpu_key: data?.limits_gpu_quota?.key,
+                        gpu_value: data?.limits_gpu_quota?.value,
+                    }
+                }
+                : {
+                    ...getSpecifyGPUDefaultState(),
+                },
+        }
+    }
+
+    panels["3"] = {
+        ...getConfigSecretDefaultState(),
+        data: {
+            configMap_file_path: data.env_cd_configmap && data.env_cd_configmap.length > 0 ?
+                data.env_cd_configmap.length >= 1 && data.env_cd_configmap[0].mount_path == null ? false : true : false,
+            secret_file_path: data.env_cd_secret && data.env_cd_secret.length > 0 ?
+                data.env_cd_secret.length >= 1 && data.env_cd_secret[0].mount_path == null ? false : true : false,
+            configMap_sub_path: data.env_cd_configmap_keys && data.env_cd_configmap_keys.length > 0 ?
+                data.env_cd_configmap_keys.length >= 1 && data.env_cd_configmap_keys[0].name == null ? false : true : false,
+            secret_sub_path: data.env_cd_secret_keys && data.env_cd_secret_keys.length > 0 ?
+                data.env_cd_secret_keys.length >= 1 && data.env_cd_secret_keys[0].name == null ? false : true : false,
+            //Set true false for subpath switches
+        },
+        secret_file_childs: data.env_cd_secret ? {
+            ...getSecretComponentDefaultState(),
+            secert_childs: {
+                ...getMultiRowDefaultState(),
+                ...getEnvCdSecretsList(data.env_cd_secret)
+            },
+        } : {},
+        configMap_file_childs: data.env_cd_configmap ? {
+            ...getConfigMapDefaultState(),
+            configMap_childs: {
+                ...getMultiRowDefaultState(),
+                ...getEnvCdCongigMapsList(data.env_cd_configmap),
+
+            }
+        } : {},
+        // WRITE WHOLE EDIT DATA FETCHING FOR SUB PATHS
+        configMap_sub_childs: data.env_cd_configmap_keys ? {
+            ...getConfigMapSubPathDefaultState(),
+            configMap_SubPath_childs: {
+                ...getMultiRowDefaultState(),
+                ...getConfigMapKeyDefaultState(),
+                ...getEnvCdConfigMapKeyList(data.env_cd_configmap_keys),
+            }
+        } : {},
+        secret_sub_childs: data.env_cd_secret_keys ? {
+            ...getSecretSubPathDefaultState(),
+            secret_SubPath_childs: {
+                ...getMultiRowDefaultState(),
+                ...getSecretKeyDefaultState(),
+                ...getEnvCdSecretKeyList(data.env_cd_secret_keys),
+            }
+        } : {}
+
+    }
+    panels["4"] = {
+        ...getMountDetailsDefaultState(),
+        data: {
+
+            entrypoint_command: data.entrypoint ? true : false,
+            pvc_file_path: data.env_cd_pvc_variable && data.env_cd_pvc_variable.length > 0 ?
+                data.env_cd_pvc_variable.length >= 1 && data.env_cd_pvc_variable[0].pvc_path == null ? false : true : false,
+            define_empty_dir: data.env_cd_empty_dir && data.env_cd_empty_dir.length > 0 ?
+                data.env_cd_empty_dir.length >= 1 && data.env_cd_empty_dir[0].mount_path == null ? false : true : false,
+            define_hostpath: data.env_cd_host_path && data.env_cd_host_path.length > 0 ?
+                data.env_cd_host_path.length >= 1 && data.env_cd_host_path[0].mount_path == null ? false : true : false,
+        },
+        empty_dir_childs: data.env_cd_empty_dir ? {
+            ...getEmptyDirComponentDefaultState(),
+            secert_childs: {
+                ...getMultiRowDefaultState(),
+                ...getEnvCdEmptyDirList(data.env_cd_empty_dir),
+
+            }
+        } : {},
+        host_path_childs: data.env_cd_host_path ? {
+            ...getHostpathComponentDefaultState(),
+            hostpath_form_childs: {
+                ...getMultiRowDefaultState(),
+                ...getEnvCdHostPathList(data.env_cd_host_path),
+
+            }
+        } : {},
+        pvc_file_childs: data.env_cd_pvc_variable ? {
+            ...getPvcComponentDefaultState(),
+            pvc_childs: {
+                ...getMultiRowDefaultState(),
+                ...getEnvCdPvcsMapsList(data.env_cd_pvc_variable),
+            }
+        } : {},
+        entry_point_childs: {
+            ...getEnabledComponentEntryPointDefaultState(),
+            data: {
+                entrypoint: data.entrypoint
+            }
+        },
+    }
+
+    var envVarCategories = getEnvDeployVarsWithCategories(data.env_cd_deploy_variable)
+    var configMapsAsEnvVar = data.env_cd_configmap && data.env_cd_configmap.length > 0 ? data.env_cd_configmap.filter(item => item.mount_path == null) : []
+    var secretAsEnvVar = data.env_cd_secret && data.env_cd_secret.length > 0 ? data.env_cd_secret.filter(item => item.mount_path == null) : []
+    console.log(configMapsAsEnvVar, secretAsEnvVar, "secretAsEnvVar")
+    panels["5"] = {
+        ...getEnvVarDefaultState(),
+        data: {
+            // "env_deploy_variable_enabled":true,
+            "deploy_variable_configMap": (envVarCategories.configMaps.length > 0) || configMapsAsEnvVar.length > 0 ? true : false,
+            "deploy_variable_raw_input": envVarCategories.keyVal.length > 0 ? true : false,
+            "deploy_variable_secret": (envVarCategories.secrets.length > 0) || secretAsEnvVar.length > 0 ? true : false,
+            "env_cd_field_ref_variable": data.env_cd_field_ref_variable && data.env_cd_field_ref_variable.length > 0 ? true : false,
+        },
+        env_var_field_ref: {
+            ...getEnabledComponentFieldRefDefaultState(),
+            fields_ref_envvar: {
+                ...getMultiRowDefaultState(),
+                ...getFieldsRefEnvVars(data.env_cd_field_ref_variable)
+            }
+        },
+        env_var_secret: {
+            ...getEnabledComponentSecretDefaultState(),
+            secert_envvar: {
+                ...getMultiRowDefaultState(),
+                ...getSecretEnvVars(data.env_cd_secret, envVarCategories.secrets)
+            }
+        },
+        env_var_configMap: {
+            ...getEnabledComponentConfigMapDefaultState(),
+            configMap_envvar: {
+                ...getMultiRowDefaultState(),
+                ...getConfigMapEnvVars(data.env_cd_configmap, envVarCategories.configMaps)
+            }
+        },
+        env_var_raw_input: {
+            ...getEnabledComponentRawInputDefaultState(),
+            multi_row: {
+                ...getMultiRowDefaultState(),
+                ...getKeyValEnvVars(envVarCategories.keyVal)
+            }
+        }
+
+    }
+    panels["6"] = {
+        ...getAffinityDefaultState(),
+        data: {
+            nodeAffinityRequired: data.env_cd_node_affinity.length > 0 && data.env_cd_node_affinity.map(item => (item.affinity_choice)).includes("REQUIRED") ? true : false,
+            nodeAffinityPreffered: data.env_cd_node_affinity.length > 0 && data.env_cd_node_affinity.map(item => (item.affinity_choice)).includes("PREFERRED") ? true : false,
+            serviceAffinity: data.env_cd_pod_affinity ? data.env_cd_pod_affinity.length > 0 ? getAffinityFlag(data.env_cd_pod_affinity, "aff") : false : false,
+            serviceAntiAffinity: data.env_cd_pod_affinity ? data.env_cd_pod_affinity.length > 0 ? getAffinityFlag(data.env_cd_pod_affinity, "anti") : false : false
+        },
+        NodeAffinityRequired_data: {
+            ...getNodeAffinityRequiredDefaultState(),
+            node_affinity: getNodeReqdAff(data.env_cd_node_affinity),
+        },
+        NodeAffinityPreffered_data: {
+            ...getNodeAffinityPrefferedDefaultState(),
+            node_affinity_preferred: getNodePreAff(data.env_cd_node_affinity)
+        },
+        ServiceAffinity_data: {
+            ...getServiceAffinityDefaultState(),
+            data:
+                getAffinityComponents(data.env_cd_pod_affinity, "aff")
+
+        },
+        ServiceAntiAffinity_data: {
+            ...getServiceAntiAffinityDefaultState(),
+            data: getAffinityComponents(data.env_cd_pod_affinity, "anti")
+        }
+    }
+    panels["7"] = {
+        ...getSecurityContextDefaultState(),
+        data: {
+            env_cd_pod_security_context: data.env_cd_pod_security_context && data.env_cd_pod_security_context.length > 0 ? true : false,
+            env_cd_container_security_context: data.env_cd_container_security_context && data.env_cd_container_security_context.length > 0 ? true : false
+        },
+        env_cd_container_security_context: {
+            ...getContainerSecurityDefaultState(),
+            container_security_context_childs: {
+                ...getMultiRowDefaultState(),
+                ...getContainerSecurityKeyValue(data.env_cd_container_security_context)
+            }
+        },
+        env_cd_pod_security_context: {
+            ...getDefaultPodSecurityState(),
+            pod_security_context_childs: {
+                ...getMultiRowDefaultState(),
+                ...getPodSecurityKeyValue(data.env_cd_pod_security_context)
+            }
+
+        }
+    }
+    panels["8"] = {
+        ...getTolerationsAndPriorityDefaultState(),
+        data: {
+            tolerations: data.env_cd_tolerations && data.env_cd_tolerations.length > 0 ? true : false,
+            priority: data.priority_class ? true : false,
+        },
+        tolerations_data: {
+            ...getTolerationsDefaultState(),
+            tolerations: data.env_cd_tolerations && data.env_cd_tolerations.length > 0 ? data.env_cd_tolerations : [],
+        },
+        priorities_data: {
+            ...prioritiesDefaultState(),
+            data: {
+                priority: data.priority_class
+            }
+        }
+    }
+    panels["9"] = {
+        ...getLivenessReadinessDefaultState(),
+        data: {
+            liveliness: data.env_cd_liveness_probe ? true : false,
+            readiness: data.env_cd_readiness_probe ? true : false,
+            canary_template_1: data.env_cd_deployment_strategy && data.env_cd_deployment_strategy.release_template_id ? true : false, max_surge: data.env_cd_deployment_strategy && data.env_cd_deployment_strategy.max_surge ? data.env_cd_deployment_strategy.max_surge : "",
+            max_unavailable: data.env_cd_deployment_strategy && data.env_cd_deployment_strategy.max_unavailable ? data.env_cd_deployment_strategy.max_unavailable : "",
+            minimum_ready: data.env_cd_deployment_strategy ? data.env_cd_deployment_strategy.minimum_ready : "",
+            "progress_deadline": data.env_cd_deployment_strategy && data.env_cd_deployment_strategy.progress_deadline ? data.env_cd_deployment_strategy.progress_deadline : "",
+            "termination_grace_period": data.env_cd_deployment_strategy && data.env_cd_deployment_strategy.termination_grace_period ? data.env_cd_deployment_strategy.termination_grace_period : "",
+            "revision_history_limit": data.env_cd_deployment_strategy && data.env_cd_deployment_strategy.revision_history_limit ? data.env_cd_deployment_strategy.revision_history_limit : "",
+            id: data_post_for_versioing ? null : clone_env_id ? null : data.env_cd_deployment_strategy && data.env_cd_deployment_strategy.id,
+            deployment_rollback_validation: data.deployment_rollback_validation ? data.deployment_rollback_validation : false,
+            server_side_apply: data.server_side_apply ? data.server_side_apply : false,
+        },
+        canary_template: {
+            ...getCanaryTemplateDropDownDefaultState(),
+            data: {
+                release_template_id: data.env_cd_deployment_strategy && data.env_cd_deployment_strategy.release_template_id ?
+                    data.env_cd_deployment_strategy.release_template_id : ""
+            }
+        },
+        Liveness_data: {
+            ...getLivenessDefaultState(),
+            data: data.env_cd_liveness_probe ? getLivelinessData(data) : {}
+        },
+
+        Readiness_data: {
+            ...getReadinessDefaultState(),
+            data: data.env_cd_readiness_probe ? getReadinessData(data) : {}
+        }
+
+
+    }
+    panels["10"] = {
+        ...getDefaultLabelsAnnotationsState(),
+        ...{
+            labels: data.labels,
+            annotations: data.annotations,
+            label_selectors: data.label_selectors,
+            is_edit: !clone_env_id && !clone_deploy_id,
+            data: {
+                labels_enabled: data.labels.length > 0 ? true : false,
+                annotations_enabled: data.annotations.length > 0 ? true : false,
+                label_selectors_enabled: data.label_selectors.length > 0 ? true : false,
+            }
+        }
+
+    }
+    var only_pre_hooks_list = new Array();
+    if (data.env_cd_hook && data.env_cd_hook.length > 0) {
+        data.env_cd_hook.forEach(item => {
+            if (item.action_type == "PRE") {
+                only_pre_hooks_list.push(item);
+            }
+            return only_pre_hooks_list;
+        })
+    }
+    var only_post_hooks_list = new Array();
+    if (data.env_cd_hook && data.env_cd_hook.length > 0) {
+        data.env_cd_hook.forEach(item => {
+            if (item.action_type == "POST") {
+                only_post_hooks_list.push(item);
+            }
+            return only_post_hooks_list;
+        })
+    }
+    panels["11"] = getAdditionalManifestDefaultState();
+    if (data.env_cd_other_manifest && data.env_cd_other_manifest.manifest_meta_data) {
+        var meta = data.env_cd_other_manifest.manifest_meta_data;
+        var strategy = meta.strategy;
+        panels["11"].data.additional_manifest_enabled = true;
+        if (strategy === 'UPLOADED_MANIFEST') {
+            panels["11"].data.active_tab = 'file_upload';
+            panels["11"].fileUpload = {
+                content: '',
+                form_data: {
+                    data: {
+                        files: meta.manifest_file_paths
+                            ? meta.manifest_file_paths.map(name => (typeof name === 'string' ? { name, content: '', event_name: 'files' } : name))
+                            : [],
+                        cmd_agrs: [],
+                    },
+                    error: { files: '' },
+                    default_validations: { files: [VALIDATION_TYPE_REQUIRED] },
+                },
+            };
+        } else if (strategy === 'GIT_MANIFEST') {
+            panels["11"].data.active_tab = 'git_url';
+            panels["11"].gitRepo = {
+                git_url: meta.manifest_git_repo_id,
+                branch_name: meta.manifest_git_repo_branch,
+                file_paths: meta.manifest_file_paths && meta.manifest_file_paths.length > 0 ? meta.manifest_file_paths[0] : '',
+                branches: [],
+            };
+        } else if (strategy === 'YAML_MANIFEST') {
+            panels["11"].data.active_tab = 'yaml_editor';
+            panels["11"].data.yaml_content = meta.manifest_file_paths && meta.manifest_file_paths.length > 0
+                ? atob(meta.manifest_file_paths[0].content || '')
+                : '';
+        }
+    }
+
+    panels["12"] = {
+        ...getDefaultServiceHookState(),
+        ...{
+            add_pre_hook: {
+                ...getAddPreHookState(),
+                pre_hook_childs: {
+                    ...hooksEditDataParser(only_pre_hooks_list, "PRE"),
+                    data: {},
+                    child_inherits: { ...hooksEditDataParser(only_pre_hooks_list, "PRE") }
+                }
+            },
+            add_post_hook: {
+                ...getAddPostHookState(),
+                post_hook_childs: {
+                    ...hooksEditDataParser(only_post_hooks_list, "POST"),
+                    data: {},
+                    child_inherits: { ...hooksEditDataParser(only_post_hooks_list, "POST") }
+                }
+            },
+            // ← ADD THIS: Initialize host_mapping_pod with actual data
+            host_mapping_pod: data.host_mapping ? {
+                hostMapping_childs: {
+                    ...getMultiRowDefaultState(),
+                    ...getHostMappingList(data.host_mapping)  // ← Parse host mapping data
+                },
+                child_inherits: {
+                    hostMapping_childs: {}
+                }
+            } : {
+                hostMapping_childs: {
+                    ...getMultiRowDefaultState(),
+                    child_inherits: {
+                        1: { view_mode: false }
+                    }
+                },
+                child_inherits: {
+                    hostMapping_childs: {}
+                }
+            },
+            data: {
+                pre_hook_enabled: hooksEditDataParser(only_pre_hooks_list, "PRE")["1"] ? true : false,
+                post_hook_enabled: hooksEditDataParser(only_post_hooks_list, "POST")["1"] ? true : false,
+                queue_name: data.queue_name ? data.queue_name : null,
+                host_mapping: data.host_mapping ? true : false  // ← Add this
+            }
+        }
+    }
+    panels["13"] = {
+        ...getVersioningDetailsDefaultState(),
+        ...{
+            gitRepo: {
+                draft_branch: data.draft_branch ? data.draft_branch : null,
+                git_url: data.versioning_repo_id ? data.versioning_repo_id : "",
+                main_branch: data.main_branch ? data.main_branch : null,
+                deployed_branch: data.deployed_branch ? data.deployed_branch : null,
+                versioning_path: data.versioning_path ? data.versioning_path : "",
+                auto_refresh: data.auto_refresh ? 1 : 2
+            }
+        }
+    }
+    return panels;
+}
+
+function getAffinityComponents(data, flag) {
+    var required = new Array()
+    var preffered = new Array()
+
+    data.forEach(aff => {
+        if (flag == "aff" && aff.affinity_type) {
+            if (aff.affinity_choice == "REQUIRED")
+                required = [...required, aff.component_id]
+            else {
+                preffered = [...preffered, aff.component_id]
+            }
+        }
+        if (flag == "anti" && !aff.affinity_type) {
+            if (aff.affinity_choice == "REQUIRED")
+                required = [...required, aff.component_id]
+            else {
+                preffered = [...preffered, aff.component_id]
+            }
+        }
+    })
+    return {
+        required: required,
+        preffered: preffered
+
+    }
+}
+
+function getNodeReqdAff(nodes) {
+    var final_obj = { ...getMultiRowDefaultState() };
+    nodes.forEach(node => {
+        if (node.affinity_choice == "REQUIRED") {
+
+            final_obj = {
+                ...final_obj,
+                data: {},
+                child_inherits: getAffChild(node.key_value_with_operator),
+                ...getAffChild(node.key_value_with_operator)
+            }
+        }
+    })
+    return final_obj;
+}
+function getNodePreAff(nodes) {
+    var final_obj = { ...getMultiRowDefaultState() };
+    nodes.forEach(node => {
+        if (node.affinity_choice == "PREFERRED") {
+
+            final_obj = {
+                ...final_obj,
+                data: {},
+                child_inherits: getAffChild(node.key_value_with_operator),
+                ...getAffChild(node.key_value_with_operator)
+            }
+        }
+    })
+    return final_obj;
+}
+function getAffChild(node) {
+    var final_obj = {};
+    var count = 0;
+    if (node) {
+        node.forEach(n => {
+            if (n)
+                final_obj = {
+                    ...final_obj,
+                    [++count]: {
+                        ...getNodeAffinityInputBodyDefaultState(),
+                        data: n ? n : {}
+                    }
+                }
+        })
+    }
+    return final_obj;
+}
+
+function getAffinityFlag(data, flag) {
+    var final_flag = false;
+    data.forEach(aff => {
+        if (flag == "aff" && aff.affinity_type) {
+            final_flag = true;
+            return true;
+        }
+        if (flag == "anti" && !aff.affinity_type) {
+            final_flag = true;
+            return true;
+        }
+    })
+    return final_flag;
+}
+function getReadinessData(data) {
+    return {
+        failure_threshold: data.env_cd_readiness_probe.failure_threshold,
+        initial_delay_seconds: data.env_cd_readiness_probe.initial_delay_seconds,
+        path: data.env_cd_readiness_probe.path,
+        period_seconds: data.env_cd_readiness_probe.period_seconds,
+        port: data.env_cd_readiness_probe.port,
+        timeout_seconds: data.env_cd_readiness_probe.timeout_seconds,
+        id: data.env_cd_readiness_probe.id,
+        exec_cmd: data.env_cd_readiness_probe.exec_cmd,
+        probe_type: data.env_cd_readiness_probe.probe_type,
+        scheme: data.env_cd_readiness_probe.scheme
+    }
+
+}
+function getEntryPointData(data) {
+    return {
+        entrypoint: data.entrypoint.entrypoint
+    };
+}
+function getLivelinessData(data) {
+    return {
+        failure_threshold: data.env_cd_liveness_probe.failure_threshold,
+        initial_delay_seconds: data.env_cd_liveness_probe.initial_delay_seconds,
+        path: data.env_cd_liveness_probe.path,
+        period_seconds: data.env_cd_liveness_probe.period_seconds,
+        port: data.env_cd_liveness_probe.port,
+        timeout_seconds: data.env_cd_liveness_probe.timeout_seconds,
+        id: data.env_cd_liveness_probe.id,
+        exec_cmd: data.env_cd_liveness_probe.exec_cmd,
+        probe_type: data.env_cd_liveness_probe.probe_type,
+        scheme: data.env_cd_liveness_probe.scheme
+    };
+}
+
+function getEnvCdSecretsList(secrets) {
+    var secretsList = {};
+    var count = 1;
+    var child_inherits = {}
+
+    secrets.forEach(secret => {
+        if (secret.mount_path != null) {
+            secretsList = {
+                ...secretsList, [count]: {
+                    ...getSecretBodyDefaultState(),
+                    data: {
+                        secret_name: secret.name,
+                        secret_mount_path: secret.mount_path,
+                        secret_id: secret.id
+                    }
+                }
+            }
+            child_inherits = { ...child_inherits, [count++]: {} }
+        }
+    });
+    return { ...secretsList, child_inherits: child_inherits };
+}
+
+function getEnvCdCongigMapsList(configMaps) {
+    var configMapsList = {};
+    var count = 1;
+    var child_inherits = {}
+    configMaps.forEach(configMap => {
+        if (configMap.mount_path != null) {
+            configMapsList = {
+                ...configMapsList, [count]: {
+                    ...getConfigMapBodyDefaultState(),
+                    data: {
+                        configMap_name: configMap.name,
+                        configMap_mount_path: configMap.mount_path,
+                        configMap_id: configMap.id
+                    }
+                }
+            }
+            child_inherits = { ...child_inherits, [count++]: {} }
+        }
+
+
+    });
+    return { ...configMapsList, child_inherits: child_inherits };
+}
+
+function getEnvCdConfigMapKeyList(configMapKeys) {
+    var configMapNkeys = {};
+    let count = 1;
+    var child_inherits = {};
+    configMapKeys.forEach(configMapkey => {
+        if (configMapkey.name != null) {
+            configMapNkeys = {
+                ...configMapNkeys, [count]: {
+                    ...getConfigMapKeyDefaultState(),
+                    data: {
+                        comfigMap_for_subpath: configMapkey.name,
+                    },
+                    configMap_keys_child: {
+
+                        ...getConfigMapKeyNSubPathData(configMapkey.sub_path_key_value),
+                    }
+                }
+            }
+            child_inherits = { ...child_inherits, [count++]: {} }
+        }
+    });
+    return { ...configMapNkeys, child_inherits: child_inherits }
+}
+
+function getConfigMapKeyNSubPathData(configMapKeyNSubPathList) {
+    var configMapKeyNSubPath = {};
+    let count = 1;
+    var child_inherits = {};
+    configMapKeyNSubPathList.forEach(configkeyNsub => {
+        if (configkeyNsub.name != null) {
+            configMapKeyNSubPath = {
+                ...configMapKeyNSubPath, [count]: {
+                    ...getConfigMapKeyNSubPathBody(),
+                    data: {
+                        configMap_key: configkeyNsub.name,
+                        sub_path: configkeyNsub.sub_path,
+                    }
+                }
+            }
+            child_inherits = { ...child_inherits, [count++]: {} }
+        }
+    });
+    return { ...configMapKeyNSubPath, child_inherits: child_inherits }
+}
+
+function getEnvCdSecretKeyList(secretKeys) {
+    var secretNKeys = {};
+    let count = 1;
+    var child_inherits = {};
+    secretKeys.forEach(secretkey => {
+        if (secretkey.name != null) {
+            secretNKeys = {
+                ...secretNKeys, [count]: {
+                    ...getSecretKeyDefaultState(),
+                    data: {
+                        secret_for_subpath: secretkey.name,
+                    },
+                    secret_keys_child: {
+
+                        ...getSecretKeyNSubPathData(secretkey.sub_path_key_value),
+                    }
+                }
+            }
+            child_inherits = { ...child_inherits, [count++]: {} }
+        }
+    });
+    return { ...secretNKeys, child_inherits: child_inherits }
+}
+
+function getSecretKeyNSubPathData(secretKeyNSubPathList) {
+    var secretKeyNSubPath = {};
+    let count = 1;
+    var child_inherits = {};
+    secretKeyNSubPathList.forEach(secretkeyNsub => {
+        if (secretkeyNsub.name != null) {
+            secretKeyNSubPath = {
+                ...secretKeyNSubPath, [count]: {
+                    ...getSecretKeyNSubPathBody(),
+                    data: {
+                        secret_key: secretkeyNsub.name,
+                        sub_path: secretkeyNsub.sub_path,
+                    }
+                }
+            }
+            child_inherits = { ...child_inherits, [count++]: {} }
+        }
+    });
+    return { ...secretKeyNSubPath, child_inherits: child_inherits }
+}
+
+export function getEnvCdEmptyDirList(configMaps, emptyDirList) {
+
+    var configMapsList = {};
+    var count = 1;
+    var child_inherits = {}
+    configMaps.forEach(configMap => {
+        var foundEntry = emptyDirList && emptyDirList.length > 0 ? emptyDirList.find(item => item.label === configMap.name) : null;
+        if (configMap.mount_path != null) {
+            configMapsList = {
+                ...configMapsList, [count]: {
+                    ...getEmptyDirFormDefaultState(),
+                    open_custom: foundEntry ? false : true,
+
+                    data: {
+                        name: configMap.name,
+                        mount_path: configMap.mount_path,
+                        id: configMap.id
+                    }
+                }
+            }
+            child_inherits = { ...child_inherits, [count++]: {} }
+        }
+
+
+    });
+    return { ...configMapsList, child_inherits: child_inherits };
+}
+
+// getHostPathFormDefaultState
+
+export function getEnvCdHostPathList(configMaps, hostPathList) {
+
+    var configMapsList = {};
+    var count = 1;
+    var child_inherits = {}
+    configMaps.forEach(configMap => {
+        var foundEntry = hostPathList && hostPathList.length > 0 ? hostPathList.find(item => item.label === configMap.name) : null;
+        if (configMap.mount_path != null) {
+            configMapsList = {
+                ...configMapsList, [count]: {
+                    ...getHostPathFormDefaultState(),
+                    open_custom: foundEntry ? false : true,
+                    freez_input: foundEntry ? true : false,
+                    data: {
+                        name: configMap.name,
+                        mount_path: configMap.mount_path,
+                        host_path: configMap.host_path,
+                        id: configMap.id
+                    }
+                }
+            }
+            child_inherits = { ...child_inherits, [count++]: {} }
+        }
+
+
+    });
+    return { ...configMapsList, child_inherits: child_inherits };
+}
+
+function getEnvCdPvcsMapsList(configMaps) {
+    var configMapsList = {};
+    var count = 1;
+    var child_inherits = {}
+    configMaps.forEach(configMap => {
+        if (configMap.pvc_path != null) {
+            configMapsList = {
+                ...configMapsList, [count]: {
+                    ...getPVSsBodyDefaultState(),
+                    data: {
+                        pvc_name: configMap.pvc_name,
+                        pvc_path: configMap.pvc_path,
+                        pvc_id: configMap.id
+                    }
+                }
+            }
+            child_inherits = { ...child_inherits, [count++]: {} }
+        }
+
+
+    });
+    return { ...configMapsList, child_inherits: child_inherits };
+}
+
+export function getEnvDeployVarsWithCategories(envDeployVars) {
+
+    var evnCDVarsWithCategories = {}
+    evnCDVarsWithCategories.secrets = []
+    evnCDVarsWithCategories.configMaps = []
+    evnCDVarsWithCategories.keyVal = []
+
+    if (envDeployVars) {
+        envDeployVars.forEach(envDeployVar => {
+
+            if (envDeployVar.value_from_secret) {
+                evnCDVarsWithCategories.secrets = [...evnCDVarsWithCategories.secrets,
+                {
+                    secret_service_key: envDeployVar.env_key,
+                    secret_name: envDeployVar.value_from_secret.name,
+                    secret_key: envDeployVar.value_from_secret.key,
+                    secret_id: envDeployVar.id
+                }
+                ]
+            } else if (envDeployVar.value_from_configmap) {
+                evnCDVarsWithCategories.configMaps = [...evnCDVarsWithCategories.configMaps,
+                {
+                    configMap_service_key: envDeployVar.env_key,
+                    configMap_name: envDeployVar.value_from_configmap.name,
+                    configMap_key: envDeployVar.value_from_configmap.key,
+                    configMap_id: envDeployVar.id
+                }
+                ]
+            } else {
+                evnCDVarsWithCategories.keyVal = [...evnCDVarsWithCategories.keyVal, {
+                    env_key: envDeployVar.env_key,
+                    env_value: envDeployVar.env_value,
+                    keyVal_id: envDeployVar.id
+                }]
+            }
+        })
+    }
+
+    return evnCDVarsWithCategories;
+}
+
+export function getEnvDeployVarsWithCategoriesSidecars(envDeployVars) {
+    console.log(envDeployVars, 'env_data_for_edit=>0001');
+    var evnCDVarsWithCategories = {}
+    evnCDVarsWithCategories.secrets = []
+    evnCDVarsWithCategories.configMaps = []
+    evnCDVarsWithCategories.keyVal = []
+    if (envDeployVars) {
+        envDeployVars.forEach(envDeployVar => {
+
+            if (envDeployVar.value_from_secret) {
+                evnCDVarsWithCategories.secrets = [...evnCDVarsWithCategories.secrets,
+                {
+                    secret_service_key: envDeployVar.env_key,
+                    secret_name: envDeployVar.value_from_secret.name,
+                    secret_key: envDeployVar.value_from_secret.key,
+                    secret_id: envDeployVar.id
+                }
+                ]
+            } else if (envDeployVar.value_from_configmap) {
+                evnCDVarsWithCategories.configMaps = [...evnCDVarsWithCategories.configMaps,
+                {
+                    configMap_service_key: envDeployVar.env_key,
+                    configMap_name: envDeployVar.value_from_configmap.name,
+                    configMap_key: envDeployVar.value_from_configmap.key,
+                    configMap_id: envDeployVar.id
+                }
+                ]
+            } else {
+                // console.log(envDeployVar,"sidecars =======>")
+                evnCDVarsWithCategories.keyVal = [...evnCDVarsWithCategories.keyVal, {
+                    env_key: envDeployVar.env_key,
+                    env_value: envDeployVar.env_value,
+                    keyVal_id: envDeployVar.id
+                }]
+            }
+        })
+    }
+
+    return evnCDVarsWithCategories;
+}
+
+function getSecretEnvVars(secret_with_mount_file, secrets) {
+    var secretsList = {};
+    var count = 1;
+    var child_inherits = {}
+    secret_with_mount_file.forEach(secret => {
+        if (secret.mount_path == null) {
+            secretsList = {
+                ...secretsList, [count]: {
+                    ...getSecretInputBodyDefaultState(),
+                    data: {
+                        secret_name: secret.name,
+                        as_env_var: secret.mount_path == null ? true : false,
+                        secret_id: secret.id
+                    }
+                }
+            }
+            child_inherits = { ...child_inherits, [count++]: {} }
+        }
+    });
+    if (secrets) {
+        secrets.forEach(secret => {
+            secretsList = {
+                ...secretsList, [count]: {
+                    ...getSecretInputBodyDefaultState(),
+                    data: {
+                        ...secret
+                    }
+                }
+            }
+            child_inherits = { ...child_inherits, [count++]: {} }
+        });
+
+    }
+    return { ...secretsList, child_inherits: child_inherits };
+
+}
+
+function getConfigMapEnvVars(config_with_mount_file, configMaps) {
+    var configMapsList = {};
+    var child_inherits = {}
+    var count = 1;
+    config_with_mount_file.forEach(configMap => {
+        if (configMap.mount_path == null) {
+            configMapsList = {
+                ...configMapsList, [count]: {
+                    ...getConfigInputBodyDefaultState(),
+                    data: {
+                        configMap_name: configMap.name,
+                        as_env_var: configMap.mount_path == null ? true : false,
+                        configMap_id: configMap.id
+                    }
+                }
+            }
+            child_inherits = { ...child_inherits, [count++]: {} }
+        }
+
+
+    });
+    if (configMaps) {
+        configMaps.forEach(configMap => {
+            configMapsList = {
+                ...configMapsList, [count]: {
+                    ...getConfigInputBodyDefaultState(),
+                    data: {
+                        ...configMap
+                    }
+                }
+            }
+            child_inherits = { ...child_inherits, [count++]: {} }
+
+        });
+    }
+    return { ...configMapsList, child_inherits: child_inherits };
+}
+
+const getPodSecurityKeyValue = (keyVals) => {
+    var keyValsList = {};
+    var count = 1;
+    var child_inherits = {}
+    if (keyVals) {
+        keyVals.forEach(keyVal => {
+            keyValsList = {
+                ...keyValsList, [count]: {
+                    ...getPodSecurityBodyDefaultState(),
+                    data: {
+                        ...keyVal
+                    }
+                }
+            }
+            child_inherits = { ...child_inherits, [count++]: {} }
+
+        });
+    }
+    return { ...keyValsList, child_inherits: child_inherits };
+}
+
+const getContainerSecurityKeyValue = (keyVals) => {
+    var keyValsList = {};
+    var count = 1;
+    var child_inherits = {}
+    if (keyVals) {
+        keyVals.forEach(keyVal => {
+            keyValsList = {
+                ...keyValsList, [count]: {
+                    ...getContainerSecurityBodyDefaultState(),
+                    data: {
+                        ...keyVal
+                    }
+                }
+            }
+            child_inherits = { ...child_inherits, [count++]: {} }
+
+        });
+    }
+    return { ...keyValsList, child_inherits: child_inherits };
+}
+
+function getFieldsRefEnvVars(keyVals) {
+    var keyValsList = {};
+    var count = 1;
+    var child_inherits = {}
+    if (keyVals) {
+        keyVals.forEach(keyVal => {
+            keyValsList = {
+                ...keyValsList, [count]: {
+                    ...getFieldsRefInputBodyDefaultState(),
+                    data: {
+                        ...keyVal
+                    }
+                }
+            }
+            child_inherits = { ...child_inherits, [count++]: {} }
+
+        });
+    }
+    return { ...keyValsList, child_inherits: child_inherits };
+}
+
+
+function getKeyValEnvVars(keyVals) {
+    var keyValsList = {};
+    var count = 1;
+    var child_inherits = {}
+    if (keyVals) {
+        keyVals.forEach(keyVal => {
+            keyValsList = {
+                ...keyValsList, [count]: {
+                    ...getRawInputBodyDefaultState(),
+                    data: {
+                        ...keyVal
+                    }
+                }
+            }
+            child_inherits = { ...child_inherits, [count++]: {} }
+
+        });
+    }
+    return { ...keyValsList, child_inherits: child_inherits };
+}
+
+// Add this function in CdInfo.js (after getKeyValEnvVars function)
+
+function getHostMappingList(hostMappingData) {
+    var hostMappingList = {};
+    var count = 1;
+    var child_inherits = {};
+
+    if (hostMappingData && Array.isArray(hostMappingData)) {
+        hostMappingData.forEach(hostMapping => {
+            hostMappingList = {
+                ...hostMappingList,
+                [count]: {
+                    data: {
+                        ip_address: hostMapping.ip_address || "",
+                        host_alias: Array.isArray(hostMapping.host_alias)
+                            ? hostMapping.host_alias
+                            : [hostMapping.host_alias]
+                    },
+                    error: {},
+                    validations: {}
+                }
+            };
+            child_inherits = { ...child_inherits, [count++]: { view_mode: false } };
+        });
+    }
+
+    return { ...hostMappingList, child_inherits: child_inherits };
+}
+
+const getIngressListAndDeleteIds = (data) => {
+    var final_arr = [];
+    if (data && data.length > 0) {
+        data.forEach(item => {
+            if (item['id']) {
+                delete item['id']
+            }
+            if (item['updated_at']) {
+                delete item['updated_at']
+            }
+            if (item['created_at']) {
+                delete item['created_at']
+            }
+            final_arr.push(item);
+        })
+    }
+    return final_arr
+}
+
+export function getSelectedEnv(id, data) {
+    var selectedEnv = {};
+    data.forEach(env => {
+        if (env.id == id) {
+            selectedEnv = { ...env }
+        }
+    })
+    return selectedEnv; 
+}
+
+const useStyles = makeStyles(theme => ({
+   root: {
+        padding: "var(--space-10) var(--space-20)",
+        backgroundColor: 'var(--color-white)',
+        '& > .card': {
+            backgroundColor: 'var(--color-grey-000)',
+            '&.card.hide-first-child': {
+                '& .horizontal-tab-wrapper-v3': {
+                    backgroundColor: 'var(--color-grey-100) !important'
+    },
+    '& .md-stepper-horizontal': {
+        maxWidth: '100% !important',
+                    background: "var(--color-white)",
+                }
+    },
+            '& .card-footer': {
+            backgroundColor: 'var(--color-white)',
+                justifyContent: 'flex-end'
+            },
+            '& .card ': {
+                margin: 'var(--space-10)',
+                '& .headerul': {
+                    borderBottom: 'var(--space-1) solid #dedede'
+                },
+                boxShadow: 'none',
+                '& .MuiGrid-item': {
+                    '& .input-component': {
+                        marginBottom: 'var(--space-10)'
+                    },
+                },
+                '& .input-component': {
+                    marginBottom: 'var(--space-0)'
+                },
+                '& .input-cont': {
+                    '& .headerul': {
+                        borderBottom: 'var(--space-0)'
+                    }
+                },
+
+            },
+            '& .card-add-service': {
+                '& .image-upload-wrap': {
+                    height: 'var(--space-50)'
+                }
+            }
+        }
+    }
+}))
