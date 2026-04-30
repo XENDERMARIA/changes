@@ -1,0 +1,321 @@
+import React, { useEffect, useState } from 'react';
+import PropTypes from 'prop-types';
+import HorizontalTab from '../wizardComponents/HorizontalTab';
+import HorizontalTabNewUI from '../wizardComponents/HorizontalTabNewUI';
+import Button from '../genericComponents/Button';
+
+const defaultWizardJson = [
+    {
+        order: 1,
+        mainText: "DefaultPanel",
+        body: DefaultPanel
+    },
+    {
+        order: 2,
+        mainText: "DefaultPanel",
+        body: DefaultPanel
+    },
+    {
+        order: 3,
+        mainText: "DefaultPanel",
+        body: DefaultPanel
+    }
+
+];
+
+
+export const StepWizard = ({ moveBackEvent, ...props }) => {
+    let wizardJson = props.dataJson ? props.dataJson : defaultWizardJson;
+    const stepper_variant = props.stepper_variant ? props.stepper_variant : null;
+    const variant = props.variant ? props.variant : null;
+    const Stepper = props.horizontalTab ? props.horizontalTab : HorizontalTab;
+    const Footer = props.footer ? props.footer : DefaultFooter
+    const indexedDataJson = arrayToIndexedObject(wizardJson);
+    console.log(indexedDataJson, 'djang_0sd')
+    const childInherits = {};
+    const prev_state = props.prev_state ? props.prev_state : null;
+    const isListing = props.isListing ? props.isListing : false;
+    const extraProps = props.extraProps ? props.extraProps : null;
+    const style = props.style ? props.style : {}
+    const type = props.type ? props.type : null;
+    const child_build = props.child_build;
+    const child_build_data = props.child_build_data;
+    const application_id = props.application_id;
+    const parentPath = props.parentPath ? props.parentPath : null;
+    const cancelButtonUrl = props.cancelButtonUrl ? props.cancelButtonUrl : () => { };
+    const shallow_cloning = props.shallow_cloning;
+    const depth = props.depth;
+    const is_add = props.is_add;
+    const [state, setState] = useState(prev_state ? prev_state : {
+        panels: {},
+        selectedTabOrder: props.currentTab ? props.currentTab : 1,
+    })
+    console.log(state,"sdbcjhsdgbvgchds")
+    // console.log(state, "agatftt ===========>")
+    console.log(extraProps, "agatftt ===========>")
+
+    useEffect(() => {
+        setState(new_state => ({ ...new_state, ...prev_state }))
+    }, [prev_state])
+
+    function getActivePanel() {
+        console.log(indexedDataJson, state.selectedTabOrder, 'data_00psdsdsd')
+        console.log(indexedDataJson[state.selectedTabOrder], 'data_00psd_po')
+        const Component = indexedDataJson[state.selectedTabOrder].body;
+
+        return <Component extraProps={extraProps}
+            key={indexedDataJson[state.selectedTabOrder].order + "_" + indexedDataJson[state.selectedTabOrder].mainText}
+            inherits={childInherits}
+            prev_state={state.panels[state.selectedTabOrder]}
+            total_state={state.panels}
+            type={type}
+            child_build={child_build}
+            child_build_data={child_build_data}
+            application_id={application_id}
+            shallow_cloning={shallow_cloning}
+            depth={depth} is_add={is_add} />
+    }
+
+    const moveNext = () => {
+        console.log(childInherits, "wizard---datataaa")
+
+        const selected_tab_order = state.selectedTabOrder;
+        console.log(selected_tab_order, wizardJson.length, childInherits, "wizarddatataaa")
+        let result = childInherits?.validateForm ? childInherits?.validateForm() ? childInherits?.validateForm() : { valid: true } : { valid: true };
+        try {
+            childInherits.getAPIObject();
+        }
+        catch (e) {
+            console.log(e, "adhbchdgcdgsbhsd")
+        }
+        if (result.valid) {
+            const panelStateData = childInherits.getState();
+            console.log(panelStateData, 'panel_state_data_001')
+            if (state.selectedTabOrder != wizardJson.length) {
+
+                let currentTabOrder = state.selectedTabOrder
+
+                setState(new_state => ({
+                    ...new_state,
+                    selectedTabOrder: (selected_tab_order + 1),
+                    panels: {
+                        ...new_state.panels,
+                        [selected_tab_order]: childInherits.getState ? childInherits.getState() : {}
+                    }
+                }));
+                props.sendTabChangeEvent && props.sendTabChangeEvent(currentTabOrder + 1)
+                props.currentTabData && props.currentTabData(childInherits.getState ? childInherits.getState() : {});
+            }
+
+            else {
+                setState(new_state => ({
+                    ...new_state,
+                    selectedTabOrder: selected_tab_order,
+                    panels: {
+                        ...new_state.panels,
+                        [selected_tab_order]: childInherits.getState ? childInherits.getState() : {}
+                    }
+                }));
+                return true;
+            }
+        }
+    }
+
+    const moveBack = () => {
+        const selected_tab_order = state.selectedTabOrder;
+        if (state.selectedTabOrder != 1) {
+            setState(new_state => ({
+                ...new_state,
+                selectedTabOrder: (selected_tab_order - 1),
+                panels: {
+                    ...new_state.panels,
+                    [selected_tab_order]: childInherits.getState ? childInherits.getState() : {}
+                }
+            }));
+            moveBackEvent && moveBackEvent(selected_tab_order - 1)
+        }
+    }
+    const onSubmit = (additional_data = null) => {
+        let valid = moveNext();
+        if (valid) {
+            let complete_panel_object = {
+                ...state.panels,
+
+                [state.selectedTabOrder]: childInherits.getState ? childInherits.getState() : {}
+
+            }
+            if (props.onSubmit) props.onSubmit(complete_panel_object, additional_data);
+        }
+    }
+
+    const onSaveAndExit = () => {
+    let result = childInherits?.validateForm 
+        ? childInherits.validateForm() || { valid: true } 
+        : { valid: true };
+    if (result.valid) {
+        const complete_panel_object = {
+            ...state.panels,
+            [state.selectedTabOrder]: childInherits.getState 
+                ? childInherits.getState() 
+                : {}
+        };
+        if (props.onSubmit) props.onSubmit(complete_panel_object);
+    }
+    };
+    // const onSubmitResetTab = () => {
+    //     let valid = moveNext();
+    //     if (valid) {
+    //         let complete_panel_object = {
+    //             ...state.panels,
+
+    //             [state.selectedTabOrder]: childInherits.getState ? childInherits.getState() : {}
+
+    //         }
+    //         if (props.onSubmitResetTab) props.onSubmitResetTab(complete_panel_object);
+    //         setState(new_state => ({
+    //             ...new_state,
+    //             selectedTabOrder: 2,
+
+    //         }));
+    //     }
+    // }
+    console.log("wizarddatataaa", state)
+    console.log("wizarddatataaa", childInherits)
+    function onClickHandler(order) {
+        setState(new_state => ({
+            ...new_state,
+            selectedTabOrder: order,
+
+        }));
+    }
+
+    console.log(state, 'step_wizard_state_00psdsd')
+    return (
+        <>
+            {console.log(stepper_variant, "stepper_variantstepper_variant")}
+            {variant == "service-config" ?
+                <div className='md-stepper-wrapper'>
+                    <HorizontalTabNewUI onClickHandler={onClickHandler} tabDataList={wizardJson} tabState={{ selectedTabOrder: state.selectedTabOrder }} />
+                </div> :
+                isListing ?
+                    <HorizontalTab variant={props.step_logs ? "step_logs" : "edit_mode"} onClickHandler={onClickHandler} tabDataList={wizardJson} tabState={{ selectedTabOrder: state.selectedTabOrder }} />
+                    :
+                    stepper_variant == "new_ui" ?
+                        <div className='md-stepper-wrapper'>
+                            <HorizontalTabNewUI onClickHandler={onClickHandler} tabDataList={wizardJson} tabState={{ selectedTabOrder: state.selectedTabOrder }} />
+                        </div>
+                        :
+                        <>
+                            <div className='horizontal-tab-wrapper-v3'>
+                                <Stepper style={style} tabDataList={wizardJson} tabState={{ selectedTabOrder: state.selectedTabOrder }} />
+
+                            </div>
+                        </>
+
+
+            }
+
+            {getActivePanel()}
+            {!isListing ?
+                <Footer moveNext={moveNext}
+                    moveBack={moveBack}
+                    wizardJson={wizardJson}
+                    selectedTabOrder={state.selectedTabOrder}
+                    onSubmit={onSubmit}
+                    onSaveAndExit={onSaveAndExit}        // ADD
+                    enableSaveAndExit={props.enableSaveAndExit}  // ADD
+                    variant={variant || stepper_variant}
+                    cancelButtonUrl={cancelButtonUrl}
+                    parentPath={parentPath}
+                    total_state={state.panels}
+                    type={type} 
+                    extraProps={extraProps}
+                    />
+                : null}
+
+        </>
+    )
+}
+
+function arrayToIndexedObject(wizardJson) {
+    console.log(wizardJson, 'wizzy_ziwwy')
+    let indexedObject = {};
+    wizardJson.forEach(element => {
+        indexedObject[element.order] = element
+    });
+    return indexedObject;
+}
+
+function DefaultFooter(props) {
+    const moveBack = props.moveBack;
+    const moveNext = props.moveNext;
+    const onSubmit = props.onSubmit;
+    const wizardJson = props.wizardJson;
+    const variant = props.variant ?? null;
+    console.log(variant)
+    const cancelButtonUrl = props.cancelButtonUrl ? props.cancelButtonUrl : () => { }
+    console.log(variant, "variantvariant")
+    return (
+        <div className={variant == "policy-template-wizard" ?
+            "policy-template-footer space-between" :
+            (variant == "new_ui" || variant == "service-config") ?
+                "card-footer space-between" :
+                "card-footer space-between"}>
+                {
+                    <div className="d-flex align-center">
+                        <button className="btn btn-transparent mr-5" onClick={cancelButtonUrl}>Cancel</button>
+                        <button 
+                            className={props.selectedTabOrder == 1 ? "btn btn-outline-grey btn-disabled mr-3" : "btn btn-outline-primary mr-3"} 
+                            onClick={props.selectedTabOrder == 1 ? () => {} : moveBack}
+                        >
+                            Back
+                        </button>
+                    </div>
+                }
+
+                <div className="d-flex align-center justify-end">
+                {props.enableSaveAndExit &&
+                    <button className="btn btn-outline-primary mr-5" onClick={props.onSaveAndExit}>
+                        Save & Exit
+                    </button>
+                }
+                {
+                    wizardJson.length == props.selectedTabOrder ?
+                        <Button className="btn btn-primary mr-0" isLoading={props.extraProps?.isSubmitting} onClick={onSubmit}>{"Submit"}</Button>
+                        :
+                        <button className="btn btn-primary mr-0" onClick={moveNext}>{"Continue"}</button>
+                }
+            </div>
+        </div>
+    )
+}
+
+DefaultFooter.propTypes = {
+    ...PropTypes.objectOf(PropTypes.any),
+}
+
+function DefaultPanel() {
+    return <p className="error-msg-service-card"> DefaultPanel , dataJson props isnt recived, please check!  </p>
+}
+
+
+StepWizard.defaultProps = {
+    sendTabChangeEvent: null
+}
+
+StepWizard.propTypes = {
+    ...PropTypes.objectOf(PropTypes.any),
+    dataJson: PropTypes.any,
+    horizontalTab: PropTypes.any,
+    footer: PropTypes.any,
+    prev_state: PropTypes.any,
+    isListing: PropTypes.any,
+    extraProps: PropTypes.any,
+    style: PropTypes.any,
+    type: PropTypes.any,
+    currentTab: PropTypes.any,
+    sendTabChangeEvent: PropTypes.any,
+    currentTabData: PropTypes.any,
+    onSubmit: PropTypes.any,
+
+}
