@@ -1,0 +1,272 @@
+import React, { useState } from "react";
+import PropTypes from 'prop-types';
+import { makeStyles } from '@mui/styles';
+import Dialog from '@mui/material/Dialog';
+import { PostData } from "../../../../../util/apiInvoker";
+import properties from "../../../../../properties/properties";
+import GenerateURL from "../../../../../util/APIUrlProvider";
+import { Loading } from "../../../../utils/Loading";
+import { Tooltip } from "@mui/material";
+import { showErrorHandlerUpdated } from "../../../../../util/util";
+const AnalyseEventsError = ({ eventData }) => {
+    const classes = useStyles();
+    const [state, setState] = useState({
+        open: false,
+        data: null
+    });
+
+    console.log(eventData, 'faildeddd_sdsdsd')
+
+    const getCorrectTime = (timeInSeconds) => {
+
+        return `${timeInSeconds}s`
+    }
+
+    function makePostRequest(data_to_post) {
+        var post_url = GenerateURL({}, properties.api.error_prompts);
+
+        const data = { error_prompts: data_to_post };
+        setState((prevState) => ({
+            ...prevState,
+            loading: true,
+        }));
+        PostData(post_url, data, restartPodSuccess, restartPodFailed, true, true);
+
+    }
+
+    function restartPodFailed(error) {
+        const errorMessage = showErrorHandlerUpdated(error);
+        setState((prevState) => ({
+            ...prevState,
+            response: `Error: ${errorMessage}`,
+            loading: false,
+        }));
+    }
+
+    function restartPodSuccess(data) {
+        setState((prevState) => ({
+            ...prevState,
+            response: data.responses,
+            loading: false,
+        }));
+    }
+
+
+    const handleClickOpenDialog = () => {
+        if (eventData && eventData.reason) {
+            makePostRequest(eventData.reason)
+        }
+        setState(prevState => ({ ...prevState, open: true }))
+    }
+
+    return (
+        <>
+
+            <div className="d-flex justify-center">
+                <div role='button' tabIndex={0} className={classes.buttonContainer} onKeyDown={() => { }} onClick={handleClickOpenDialog}>
+
+                    <i className="ri-information-line" style={{
+                        fontSize: "var(--font-15)",
+                        color: 'var(--color-white)',
+                        marginRight: 'var(--space-5)'
+
+                    }} /> <span style={{ cursor: 'pointer' }} className=" font-12 font-weight-600 pointer-style">Analyze Failure</span>
+                </div>
+            </div>
+            <Dialog open={state.open} className={classes.dialogStyle}>
+                <div className={classes.dialogContainer}>
+                    <div className="dialog-header">
+                        <div style={{ width: "100%" }} className="d-flex align-center space-between">
+                            <div className="d-flex align-center" style={{ width: "90%" }}>
+                                <label className="event-label capital-text  mr-15">
+                                    {eventData?.eventType}
+                                </label>
+                                <div className="status-container d-flex align-center justify-center mr-15">
+                                    <span className=" status-label">FAILED</span>
+                                </div>
+                                <div className="d-flex align-center">
+                                    <i
+                                        className="ri-time-line"
+                                        style={{
+                                            color: "var(--color-content-tertiary)",
+                                            fontSize: "var(--font-14)",
+                                            marginRight: "var(--space-5)"
+                                        }}
+                                    ></i>
+                                    <label className=" time-label">{getCorrectTime(eventData?.duration)}</label>
+                                </div>
+                            </div>
+                            <i
+                                className="ri-close-line"
+                                onClick={() => setState(prevState => ({ ...prevState, open: false }))}
+                                role="button"
+                                tabIndex={0}
+                                style={{
+                                    color: 'var(--color-grey-600)',
+                                    fontSize: "var(--font-18)",
+                                    cursor: "pointer"
+                                }}
+                                onKeyDown={() => { }}
+                            ></i>
+
+
+                        </div>
+                    </div>
+                    <div className="mid-contaienr">
+                        <p className="error-msg  mb-10">Error Message</p>
+                        <div className="d-flex align-center">
+                            <i
+                                className="ri-information-line"
+                                style={{
+                                    fontSize: 'var(--font-16)',
+                                    marginRight: 'var(--space-5)',
+                                    color: 'var(--color-warning-500)',
+                                }}
+                            ></i>
+
+                            <p className="error-msg-value ">{eventData?.message}</p>
+                        </div>
+                        <div className="error-container">
+                            <label className=" font-12 font-weight-500">
+                                {eventData?.reason}
+                            </label>
+                        </div>
+                        <div className="error-container">
+                            {
+                                state.loading ?
+                                    <div className='text-center' style={{ marginTop: '' }}>
+                                        <p className='font-12'>Analyzing the error..... please wait!!</p>
+
+                                        <Loading varient="light" />
+                                    </div>
+                                    :
+                                    state.response ?
+                                        <div className='markdown-rapper'>
+                                            <div className="d-flex align-center mb-15">
+
+                                                <span className="status-container d-flex align-center justify-center font-12 font-weight-700"
+                                                    style={{
+                                                        width: 'fit-content',
+                                                        color: 'var(--color-white)',
+                                                        fontWeight: 'var(--font-weight-700)',
+                                                        height: 'auto',
+                                                        backgroundColor: 'var(--color-tertiary-500)'
+                                                    }}>Olly Suggestions <Tooltip title="Olly: BuildPiper’s Intelligent AI Troubleshooter">
+                                                        <span className="ri-information-line font-14 color-white ml-5"></span>
+                                                    </Tooltip></span>
+
+                                            </div>
+                                            <div dangerouslySetInnerHTML={{ __html: state.response }} />
+                                        </div> : null
+                            }
+                        </div>
+
+                    </div>
+
+                </div>
+            </Dialog>
+        </>
+    )
+}
+
+AnalyseEventsError.propTypes = {
+    ...PropTypes.objectOf(PropTypes.any),
+}
+
+export default AnalyseEventsError;
+
+const useStyles = makeStyles((theme) => ({
+
+    buttonContainer: {
+        width: 'var(--space-293)',
+        height: 'var(--space-40)',
+        padding: 'var(--space-10)',
+        borderRadius: 'var(--radius-6)',
+        background: 'var(--color-secondary-500)',
+        color: 'var(--color-white)',
+        textAlign: "center",
+        cursor: 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
+    },
+    '& .pointer-style': {
+        cursor: 'pointer'
+    },
+    dialogContainer: {
+        // width: 'var(--space-655)',
+        '& .dialog-header': {
+            width: "100%",
+            height: 'var(--space-56)',
+            padding: 'var(--space-16)',
+            background: 'var(--color-grey-000)',
+
+        },
+        '& .event-label': {
+            fontSize: 'var(--font-14)',
+            fontWeight: 'var(--font-weight-600)',
+            lineHeight: 'var(--line-height-21)',
+            letterSpacing: '0em',
+            textAlign: 'left',
+        },
+        '& .status-container': {
+            width: 'var(--space-62)',
+            height: 'var(--space-23)',
+            padding: 'var(--space-4) var(--space-8) var(--space-4) var(--space-8)',
+            borderRadius: 'var(--radius-4)',
+            background: 'var(--color-warning-500)',
+        },
+        '& .time-label': {
+            fontSize: 'var(--font-12)',
+            fontWeight: 'var(--font-weight-500)',
+            lineHeight: 'var(--line-height-18)',
+            letterSpacing: '0em',
+            textAlign: 'left',
+            color: 'var(--color-grey-600)',
+        },
+        '& .status-label': {
+            color: 'var(--color-white)',
+            fontSize: 'var(--font-12)',
+            fontWeight: 'var(--font-weight-700)',
+            lineHeight: 'var(--line-height-15)',
+            letterSpacing: '0em',
+            textAlign: 'left',
+        },
+        '& .mid-contaienr': {
+            padding: 'var(--space-12) var(--space-16) var(--space-16) var(--space-16)'
+        },
+        '& .error-msg': {
+            fontSize: 'var(--font-16)',
+            fontWeight: 'var(--font-weight-600)',
+            color: 'var(--color-warning-500)',
+        },
+        '& .error-msg-value': {
+            fontSize: 'var(--font-14)',
+            fontWeight: 'var(--font-weight-500)',
+            textAlign: 'left',
+            color: 'var(--color-content-secondary)'
+        },
+        '& .error-container': {
+            padding: 'var(--space-10)',
+            borderRadius: 'var(--radius-6)',
+            border: 'var(--space-1) solid var(--color-grey-300)',
+            borderStyle: 'dashed',
+            background: 'linear-gradient(0deg, var(--color-grey-000), var(--color-grey-000))',
+            marginBottom: 'var(--space-20)',
+            '& label': {
+                color: 'var(--color-content-secondary)',
+            }
+        }
+
+    },
+    dialogStyle: {
+        '& .MuiDialog-paperWidthSm': {
+            maxWidth: 'var(--space-800)'
+        },
+        '& .MuiDialog-paperScrollPaper': {
+            width: 'var(--space-700)',
+            backgroundColor: 'var(--color-white);'
+        },
+
+    }
+}))
