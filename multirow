@@ -1,0 +1,388 @@
+import React, { useState, useEffect, useRef } from 'react';
+import PropTypes from 'prop-types';
+import { getCommonFunctions } from '../../views/serviceRevamp/add/ci_flow/SourceDetails';
+import { Loading } from '../../views/utils/Loading';
+import Grid from '@mui/material/Grid';
+import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd";
+const getStateBasedOnPrevState = (prev_state, variant) => {
+    if (variant === 'reorder-version' && prev_state.count === 1) {           //it will run only intial render
+        let orderArray = []
+        prev_state && Object.keys(prev_state.child_inherits).forEach(key => orderArray.push(key))
+        return { ...prev_state, order_array: orderArray }
+    }
+    return prev_state
+}
+
+const DeleteComponent = () => {
+    return <h1>Hello</h1>
+}
+const MultiRow = (props) => {
+    console.log(props,"zjhcvghdsvcgshdvcs")
+    const custom_classes = props.custom_classes ? props.custom_classes : null;
+    const { variant } = props
+    const style = props.style ? props.style : null;
+
+    const EditableRepeatableComponent = props.RepeatableComponent;
+    const ViewRepeatableComponent = props.ViewRepeatableComponent;
+    const show_view_component = props.show_view_component
+    const repeatableComponentProps = props.repeatableComponentProps;
+    const HeaderComponent = props.HeaderComponent;
+    const zeroRowsAllowed = props.zeroRowsAllowed;
+
+    const inherits = props.inherits ? props.inherits : {};
+    let prev_state = props.prev_state ? props.prev_state : null;
+    const Rendercount = useRef(0);  //m.imp
+    Rendercount.current = Rendercount.current + 1;
+    prev_state = prev_state ? prev_state : getMultiRowDefaultState(show_view_component, ViewRepeatableComponent)
+    prev_state = { ...prev_state, show_view: show_view_component, count: Rendercount.current }
+    viewEditComponentInfoUpdate(prev_state)
+    const [state, setState] = useState(getStateBasedOnPrevState(prev_state, variant))
+    const [dataAfterOrderChanged, setDataAfterOrderChanged] = useState(null)
+    const [showLoading, setShowLoading] = useState(false)
+    const commonFunctions = getCommonFunctions(state, setState, inherits);
+    const alignSelf = props.alignSelf;
+    const borderBottom = props.borderBottom;
+    const actionCellStyle = {
+        marginLeft: 'auto',
+        display: 'flex',
+        alignItems: alignSelf ? 'flex-start' : 'center',
+        justifyContent: 'center',
+        ...(alignSelf ? { alignSelf: 'flex-start' } : {})
+    };
+
+    function viewEditComponentInfoUpdate(prev_state) {
+        console.log('prev_state_inside_fun', prev_state)
+        prev_state && prev_state.child_inherits && Object.keys(prev_state.child_inherits).forEach(key => {
+            prev_state.child_inherits[key].view_mode = ViewRepeatableComponent ? show_view_component ? true : false : false
+        })
+    }
+    function addRow() {
+        const newKey = getMaxKey(state.child_inherits);
+
+        setState(new_state => ({
+            ...new_state,
+            child_inherits: { ...state.child_inherits, [newKey]: { view_mode: ViewRepeatableComponent ? show_view_component ? true : false : false } }
+        }));
+    }
+    function handleAddRowForReorderVariant() {
+        const newKey = getMaxKey(state.child_inherits);
+        let order_array = state.order_array
+        if (order_array && !order_array.includes(newKey)) {
+            order_array.push(newKey)
+        }
+        setState(new_state => ({
+            ...new_state,
+            child_inherits: { ...state.child_inherits, [newKey]: { view_mode: ViewRepeatableComponent ? show_view_component ? true : false : false } },
+            order_array: order_array
+        }));
+    }
+
+    function deleteRow(key) {
+        let child_state = { ...state, ...inherits.getState() };
+        let child_inherits_copy = state.child_inherits;
+        delete child_inherits_copy[key];
+        delete child_state[key];
+        setState(new_state => ({
+            ...child_state,
+            child_inherits: { ...child_inherits_copy }
+
+        }));
+        setShowLoading(true);
+        setTimeout(() => {
+            setShowLoading(false)
+        }, 200);
+    }
+
+    function handleReorderVersionDeleteRow(key) {
+        let child_state = { ...state, ...inherits.getState() };
+        let child_inherits_copy = state.child_inherits;
+        delete child_inherits_copy[key];
+        delete child_state[key];
+        let order_array = child_state.order_array
+        let indexOfDeletedElement = order_array.indexOf(key)
+        order_array.splice(indexOfDeletedElement, 1)
+        setState(new_state => ({
+            ...child_state,
+            child_inherits: { ...child_inherits_copy },
+            order_array: order_array
+        }));
+        setShowLoading(true);
+        setTimeout(() => {
+            setShowLoading(false)
+        }, 200);
+    }
+
+    function edit(key) {
+        // count=count+1
+        // var child_inherit=state.child_inherits[key]
+        setState((new_state) => ({
+            ...new_state,
+            child_inherits: {
+                ...new_state.child_inherits,
+                [key]: {
+                    view_mode: false
+                }
+            }
+        }))
+    }
+
+    function cancel_edit(key) {
+        setState((new_state) => ({
+            ...new_state,
+            child_inherits: {
+                ...new_state.child_inherits,
+                [key]: {
+                    view_mode: true
+                }
+            }
+        }))
+    }
+
+
+
+    function getMaxKey(map) {
+        const keys = Object.keys(map);
+        const lastKey = keys.length == 0 ? 0 : keys[(keys.length - 1)]
+        return Number(lastKey) + 1
+    }
+
+    function showDeleteButton() {
+        if (zeroRowsAllowed) {
+            return true
+        } else {
+            if (Object.keys(state.child_inherits).length > 1) {
+                return true
+            }
+        }
+        return false
+    }
+
+    useEffect(() => {
+        if (!state.child_inherits["1"]) {
+            variant === 'classic' ? addRow() : handleAddRowForReorderVariant()
+        }
+        if (props.atleastTwo && Object.keys(state.child_inherits).length < 2) {
+            addRow()
+        }
+    }, [])
+
+    const handleDragEnd = (result) => {
+
+        const { destination, source } = result
+
+        if (!destination || destination.index === source.index) {
+            return
+        }
+
+        let arrayOfChildInherits = state.order_array
+
+        if (arrayOfChildInherits) {
+            let chnagedPostionedStep = arrayOfChildInherits[source.index]
+            arrayOfChildInherits.splice(source.index, 1)
+            arrayOfChildInherits.splice(destination.index, 0, chnagedPostionedStep)
+            setState(prevState => ({
+                ...prevState,
+                order_array: arrayOfChildInherits
+            }))
+            let child_states = inherits.getState ? inherits.getState() : null
+            setDataAfterOrderChanged(child_states)
+
+        }
+
+        return
+    }
+
+    const isKeysInSync = (childInherits, orderArray) => {
+        if (childInherits && orderArray) {
+            let keysArray = Object.keys(childInherits)
+            if (keysArray && keysArray.length === orderArray.length) {
+                return true
+            }
+        }
+
+        return false
+    }
+
+    const ReorderIconComponent = () => {
+        return <i className="ri-draggable" style={{ color: 'var(--color-grey-900)' }} />
+    }
+
+    console.log(`${variant}_state_001`, state)
+    return (<>
+        {
+            variant === "reorder-version" ?
+                < DragDropContext onDragEnd={handleDragEnd}>
+                    <Droppable droppableId={`multi_row_id_001`}>
+                        {
+                            (provided, snapshot) => (
+
+                                <div {...provided.droppableProps} ref={provided.innerRef}>
+                                    <Grid container justify="flex-start" className="font-12" style={{ padding: 'var(--space-10) 0 0 var(--space-12)' }} spacing="2">
+                                        {
+                                            HeaderComponent ? <HeaderComponent extraProps={repeatableComponentProps} /> : null
+                                        }
+
+                                    </Grid>
+                                    
+                                        {showLoading ? <Loading varient="light" /> :
+                                            isKeysInSync(state.child_inherits, state.order_array) && state.order_array.map((order, index) => (
+                                                <Draggable key={index} draggableId={`${index}`} index={index}>
+                                                    {(provided, snapshot) => (
+                                                        <div
+                                                            ref={provided.innerRef}
+                                                            {...provided.draggableProps}
+                                                            {...provided.dragHandleProps}
+
+                                                        >
+                                                            
+                                                                {state.child_inherits[order] && state.child_inherits[order].view_mode ?
+                                                                    <Grid key={order} container justify="flex-start" alignItems="center" className={borderBottom ? "border-bottom" : ""} spacing="2" style={{ padding: 'var(--space-12) var(--space-5) var(--space-10)' }}>
+                                                                        <ViewRepeatableComponent inherits={state.child_inherits[order]} id={order} prev_state={state[order]} extraProps={repeatableComponentProps} />
+                                                                        <Grid item lg={1}>
+                                                                            {showDeleteButton() && 
+                                                                            <button className="delete-btn" onClick={() => { handleReorderVersionDeleteRow(order) }}>
+                                                                                <i className={`ri-delete-bin-line font-18`}></i>
+                                                                                </button>}
+                                                                            {state.show_view ?
+                                                                                
+                                                                                    <button className="add-button-icon" onClick={() => { edit(order) }} ><BorderColorOutlined className="text-anchor-blue font-18" /></button>
+                                                                                
+                                                                                : null}
+                                                                        </Grid>
+                                                                    </Grid> :
+                                                                    <Grid key={order} className={borderBottom ? "border-bottom" : ""} style={{ padding: 'var(--space-20) var(--space-30) var(--space-5) var(--space-30)' }} >
+
+                                                                        <EditableRepeatableComponent reorderIcon={ReorderIconComponent} inherits={state.child_inherits[order]} id={order} prev_state={dataAfterOrderChanged ? dataAfterOrderChanged[order] : state[order]} extraProps={repeatableComponentProps}>
+                                                                            {showDeleteButton() && <button style={{ border: 'none' }} className="delete-btn" onClick={() => { handleReorderVersionDeleteRow(order) }}>
+                                                                            <i className={`ri-delete-bin-line font-18`}></i></button>}
+                                                                        </EditableRepeatableComponent>
+                                                                    </Grid>}
+                                                            
+                                                        </div>
+                                                    )}
+                                                </Draggable>
+
+                                            ))
+                                        }
+                                    
+                                    {provided.placeholder}
+                                </div>)
+                        }
+                    </Droppable>
+                    <Grid container justifyContent={"flex-end"} align={"center"} style={{ marginBottom: 'var(--space-20)', paddingRight: 'var(--space-30)', marginTop: 'var(--space-10)'}} >
+                        <button style={{
+                            border: 'none',
+                            boxShadow: 'none',
+                            fontSize: 'var(--font-12)',
+                            justifyContent: 'center',
+                            color: 'var(--color-white)',
+                            height: 'var(--space-30)',
+                            backgroundColor: 'var(--color-primary-500)',
+                            borderRadius: 'var(--radius-22)',
+                            width: 'var(--space-85)',
+                            display: 'flex',
+                            alignItems: 'center'
+                        }}
+                            className="nowrap" onClick={handleAddRowForReorderVariant}>
+                            <i className='ri-add-line' style={{ color: 'var(--color-white)' }} /> Add Row
+                        </button>
+                    </Grid>
+                </DragDropContext >
+                :
+                <>
+                    <Grid container justify="flex-start" className=" with-header font-12" style={{ padding: '0rem var(--space-10) 0rem' }} spacing="2">
+                        {
+                            HeaderComponent ? <HeaderComponent extraProps={repeatableComponentProps} /> : null
+                        }
+
+                        <Grid item container 
+                            justifyContent="center" 
+                            alignItems="center" lg={1}>
+                            <button className="transparent-btn nowrap" onClick={addRow}>
+                                <i className="ri-add-line"></i> Add Row
+                            </button>
+                        </Grid>
+
+                    </Grid>
+                    <>
+                        {showLoading ? <Loading varient="light" /> :
+                            state.child_inherits ? Object.keys(state.child_inherits).map(key => (
+                                <>
+                                    {state.child_inherits[key].view_mode ?
+                                        <Grid container spacing={2} justify="flex-start" alignItems="center" className={borderBottom ? "border-bottom" : ""} style={style ? { style } : { padding: 'var(--space-12) var(--space-5) var(--space-10)' }}>
+                                            <ViewRepeatableComponent inherits={state.child_inherits[key]} id={key} prev_state={state[key]} extraProps={repeatableComponentProps} />
+                                            <Grid item lg={1} style={actionCellStyle}>
+                                                {showDeleteButton() && <button className="delete-btn" onClick={() => { deleteRow(key) }}>
+                                                    <i className={`ri-delete-bin-line font-18`}></i>
+                                                    
+                                                    </button>}
+                                                {state.show_view ?
+                                                    
+                                                        <button className="add-button-icon" onClick={() => { edit(key) }} ><BorderColorOutlined className="text-anchor-blue font-18" /></button>
+                                                    
+                                                    : null}
+                                            </Grid>
+
+                                        </Grid> :
+                                        <Grid container spacing={2} justify="flex-start" alignItems="center" className={borderBottom ? "border-bottom" : ""} 
+                                        style= {style ? style : {padding: 'var(--space-12) var(--space-5) var(--space-10)' }} >
+                                      
+                                            <EditableRepeatableComponent inherits={state.child_inherits[key]} id={key} prev_state={state[key]} extraProps={repeatableComponentProps} />
+                                            <Grid item lg={1} style={actionCellStyle}>
+                                                {showDeleteButton() &&
+                                                    <button className='btn btn-icon-outline btn-icon-outline-danger' onClick={() => { deleteRow(key) }}>
+                                                        <span className='font-20 ri-delete-bin-7-line ' style={{fontWeight: 'var(--font-weight-500)'}}></span>
+                                                    </button>
+                                                }
+                                                {state.show_view ?
+                                                    <>
+                                                        <button className="add-button-icon" onClick={props.saveData}><i className="ri-save-line text-anchor-blue font-18" /></button>
+                                                        <button className="cancel-btn" onClick={() => { cancel_edit(key) }} ><i className="ri-close-line text-grey-83" /></button>
+                                                    </>
+                                                    : null}
+                                            </Grid>
+                                        </Grid>}
+                                </>
+
+                            )) : null
+                        }
+                        {
+                            variant == "Button_Placement_bottom" &&
+                            <button className={custom_classes ? custom_classes : `ml-auto transparent-btn nowrap transparent-btn-add-more mt-15`}  onClick={addRow}>
+                                <i className="ri-add-line"></i> ADD ANOTHER
+                            </button>
+                        }
+
+                    </>
+
+                </>
+        }
+
+
+
+    </>)
+
+}
+
+MultiRow.defaultProps = {
+    variant: 'classic'
+    // reorder-version   use this variant to make your multirow child reorderable(pass this as a prop)
+}
+
+MultiRow.propTypes = {
+    ...PropTypes.objectOf(PropTypes.any),
+  }
+
+export default MultiRow;
+
+
+
+export function getMultiRowDefaultState(show_view_component, ViewRepeatableComponent) {
+    console.log('default state called',)
+    return {
+        data: {},
+        child_inherits: {
+            1: { view_mode: ViewRepeatableComponent ? show_view_component ? true : false : false }
+        }
+    };
+}
